@@ -40,6 +40,7 @@ PIVOT = (RING_R * 0.3, 0.22 + BODY_H * 0.55, 0.0)
 BARREL_LEN = 4.4
 MG_X, MG_Y = -4.6, 2.3
 HATCH_X = -1.6
+HATCH_Z = -0.5  # 艙口偏左，讓走道保持暢通
 
 reset_scene()
 TEX = os.path.join(PROJECT, 'assets', 'textures')
@@ -54,8 +55,12 @@ M_BRASS = material('Brass', '#b08d4a', rough=0.35, metal=0.9)
 M_LAMP = material('Lamp', '#fff1c8', rough=0.4, emission='#ffd890')
 M_WHEEL = material('Wheel', '#2a2725', rough=0.55, metal=0.75)
 M_ISTEEL = material('InteriorSteel', '#7a7b6c', rough=0.6, metal=0.3)
-HULL_MATS = [M_ARMOR, M_INNER, M_WOOD, M_STEEL, M_BLACK, M_BRASS, M_LAMP, M_ISTEEL]
-A, IN, WOOD, ST, BLK, BRS, LMP, IST = range(8)
+M_RED = material('Red', '#8e2a22', rough=0.5)
+M_WHITE = material('Paper', '#d9d4c3', rough=0.9)
+M_OLIVE = material('Olive', '#5f5f3c', rough=0.75)
+M_CANVAS = material('Canvas', '#7a6a48', rough=1.0)
+HULL_MATS = [M_ARMOR, M_INNER, M_WOOD, M_STEEL, M_BLACK, M_BRASS, M_LAMP, M_ISTEEL, M_RED, M_WHITE, M_OLIVE, M_CANVAS]
+A, IN, WOOD, ST, BLK, BRS, LMP, IST, RED, WHT, OLV, CNV = range(12)
 
 root = empty('GunCarB' if HIGH else 'GunCarA')
 
@@ -119,10 +124,10 @@ for x in (-5.5, -1.0, 6.0):
     inside.cylinder((x, ROOF - WALL, 0), (x, ROOF - WALL - 0.12, 0), 0.12, 12, IST)
     inside.cylinder((x, ROOF - WALL - 0.12, 0), (x, ROOF - WALL - 0.2, 0), 0.09, 12, LMP)
 # 艙口梯
-for z in (-0.22, 0.22):
+for z in (HATCH_Z - 0.22, HATCH_Z + 0.22):
     inside.box((HATCH_X - 0.35, (FLOOR + ROOF) / 2, z), (0.05, ROOF - FLOOR, 0.05), IST)
 for y in [FLOOR + 0.3 * k for k in range(1, 7)]:
-    inside.cylinder((HATCH_X - 0.35, y, -0.22), (HATCH_X - 0.35, y, 0.22), 0.02, 6, IST)
+    inside.cylinder((HATCH_X - 0.35, y, HATCH_Z - 0.22), (HATCH_X - 0.35, y, HATCH_Z + 0.22), 0.02, 6, IST)
 # 彈藥架（車廂前段兩側，十糎彈）
 for side in (-1, 1):
     z = side * 1.22
@@ -146,7 +151,109 @@ for x in (-3.5, -6.2):
     for side in (-1, 1):
         inside.box((x, FLOOR + 0.45, side * (hw_in - 0.25)), (0.5, 0.06, 0.4), WOOD)
         inside.box((x, FLOOR + 0.22, side * (hw_in - 0.25)), (0.05, 0.44, 0.05), IST)
-inside.build('Interior', HULL_MATS, parent=root, bevel=0.01)
+
+# ── 牆面結構：肋骨、縱樑、管線 ──
+WALL_TOP = Y0 + top_in - ch_in  # 側牆垂直段上緣
+CEIL = Y0 + top_in
+ROOF_HALF_IN = hw_in - ch_in
+
+
+def on_wall(side, depth):
+    return side * (hw_in - depth / 2)
+
+
+for side in (-1, 1):
+    for x in range(-7, 8):
+        if abs(x) < 0.8 or 5.0 < x < 7.8:
+            continue
+        inside.box((x, (FLOOR + WALL_TOP) / 2, on_wall(side, 0.05)), (0.06, WALL_TOP - FLOOR, 0.05), IST)
+    inside.box((0, WALL_TOP - 0.03, on_wall(side, 0.06)), (LEN - 0.2, 0.06, 0.06), IST)
+    # 電線導管與托架
+    zc = side * (hw_in - 0.07)
+    inside.cylinder((-LEN / 2 + 0.1, 2.62, zc), (LEN / 2 - 0.1, 2.62, zc), 0.018, 8, ST)
+    zh = side * (hw_in - 0.09)
+    inside.cylinder((-LEN / 2 + 0.1, 1.48, zh), (LEN / 2 - 0.1, 1.48, zh), 0.035, 10, ST)
+    for x in [k * 1.5 for k in range(-5, 6)]:
+        inside.box((x, 2.62, on_wall(side, 0.09)), (0.04, 0.05, 0.09), IST)
+        inside.box((x, 1.48, on_wall(side, 0.12)), (0.05, 0.06, 0.12), IST)
+for x in range(-7, 8):
+    if abs(x - TX) < 1.1:
+        continue
+    inside.box((x, CEIL - 0.03, 0), (0.06, 0.06, ROOF_HALF_IN * 2), IST)
+# 傳聲管（黃銅）沿天花板，在砲塔下與電話旁垂下
+inside.cylinder((-LEN / 2 + 0.1, CEIL - 0.09, 0.6), (LEN / 2 - 0.1, CEIL - 0.09, 0.6), 0.022, 10, BRS)
+for x in (TX - 1.2, 1.2):
+    inside.cylinder((x, CEIL - 0.09, 0.6), (x, 2.55, 0.6), 0.022, 10, BRS)
+    inside.lathe((x, 2.55, 0.6), (0, -1, 0), [(0, 0.022), (0.08, 0.05), (0.1, 0.05), (0.1, 0)], 12, BRS)
+inside.cylinder((-LEN / 2 + 0.1, CEIL - 0.08, -0.6), (LEN / 2 - 0.1, CEIL - 0.08, -0.6), 0.02, 8, BLK)
+
+# ── 觀察孔與射擊孔（車內側） ──
+for side in (-1, 1):
+    for x in (-6.6, -2.4, 2.0):
+        inside.box((x, 2.45, on_wall(side, 0.08)), (0.62, 0.2, 0.08), IST)
+        inside.box((x, 2.45, on_wall(side, 0.1)), (0.45, 0.07, 0.1), BLK)
+    for x in (-3.0, 3.0):
+        inside.cylinder((x, 2.1, side * hw_in), (x, 2.1, side * (hw_in - 0.04)), 0.11, 14, IST)
+        inside.box((x, 2.1, on_wall(side, 0.1)), (0.04, 0.12, 0.04), ST)
+
+# ── 機槍位：保彈板彈藥箱、空彈殼袋 ──
+for side in (-1, 1):
+    for k in range(3):
+        inside.box((-5.35, FLOOR + 0.09 + k * 0.18, on_wall(side, 0.32)), (0.34, 0.17, 0.3), OLV)
+        inside.box((-5.35, FLOOR + 0.18 + k * 0.18, on_wall(side, 0.32)), (0.06, 0.02, 0.04), ST)
+    inside.box((-3.95, FLOOR + 0.09, on_wall(side, 0.32)), (0.34, 0.17, 0.3), OLV)
+    inside.box((MG_X, 1.95, on_wall(side, 0.5)), (0.22, 0.3, 0.16), CNV)
+
+# ── 步槍架（右側牆）──
+inside.box((-2.55, 2.0, on_wall(1, 0.03)), (1.0, 1.3, 0.03), WOOD)
+for k in range(4):
+    x = -2.88 + k * 0.22
+    z = hw_in - 0.1
+    inside.box((x, FLOOR + 0.3, z), (0.05, 0.5, 0.11), WOOD)
+    inside.cylinder((x, FLOOR + 0.55, z), (x, FLOOR + 1.3, z), 0.013, 8, ST)
+    inside.box((x, FLOOR + 0.62, z + 0.02), (0.03, 0.18, 0.05), WOOD)
+inside.box((-2.55, FLOOR + 1.12, on_wall(1, 0.16)), (1.0, 0.03, 0.16), WOOD)
+
+# ── 置物櫃（車尾兩側）──
+for side in (-1, 1):
+    inside.box((-7.3, FLOOR + 0.9, on_wall(side, 0.36)), (0.6, 1.8, 0.36), IST)
+    inside.box((-7.3, FLOOR + 0.9, side * (hw_in - 0.365)), (0.01, 1.7, 0.01), BLK)
+    for y in (2.6, 2.75):
+        inside.box((-7.3, y, side * (hw_in - 0.365)), (0.4, 0.02, 0.01), BLK)
+    inside.box((-7.08, FLOOR + 1.0, side * (hw_in - 0.37)), (0.03, 0.12, 0.03), ST)
+
+# ── 滅火器、急救箱、配電箱、作戰圖板 ──
+inside.lathe((0.85, FLOOR + 0.35, hw_in - 0.1), (0, 1, 0), [(0, 0.075), (0.48, 0.075), (0.53, 0.04), (0.6, 0.02), (0.6, 0)], 14, RED)
+inside.box((0.85, FLOOR + 0.6, on_wall(1, 0.03)), (0.05, 0.4, 0.03), ST)
+inside.box((-0.95, 2.15, on_wall(-1, 0.13)), (0.36, 0.28, 0.13), WHT)
+inside.box((-0.95, 2.15, -(hw_in - 0.135)), (0.06, 0.18, 0.01), RED)
+inside.box((-0.95, 2.15, -(hw_in - 0.135)), (0.18, 0.06, 0.01), RED)
+inside.box((0.85, 2.3, on_wall(-1, 0.12)), (0.3, 0.36, 0.12), IST)
+inside.box((0.85, 2.3, -(hw_in - 0.125)), (0.05, 0.08, 0.02), BLK)
+inside.box((2.45, 2.2, on_wall(-1, 0.025)), (0.7, 0.5, 0.025), WOOD)
+inside.box((2.45, 2.2, -(hw_in - 0.03)), (0.6, 0.42, 0.01), WHT)
+
+# ── 鋼盔與水壺掛鉤（右側牆）──
+for k in range(3):
+    x = 3.9 + k * 0.32
+    inside.cylinder((x, 2.42, hw_in), (x, 2.42, hw_in - 0.08), 0.012, 6, ST)
+    inside.lathe((x, 2.2, hw_in - 0.17), (0, 1, 0), [(0, 0.16), (0.02, 0.15)] + [(0.02 + 0.13 * math.sin(math.radians(a)), 0.15 * math.cos(math.radians(a))) for a in range(20, 91, 20)], 14, OLV, cap0=True)
+    inside.lathe((x, 1.95, hw_in - 0.09), (0, 0, -1), [(0, 0.07), (0.06, 0.07), (0.07, 0.03), (0.08, 0)], 12, CNV)
+
+# ── 地板上的砲彈箱 ──
+for side in (-1, 1):
+    for k in range(2):
+        inside.box((4.55, FLOOR + 0.18 + k * 0.36, on_wall(side, 0.4)), (0.55, 0.34, 0.38), WOOD)
+        inside.box((4.55, FLOOR + 0.18 + k * 0.36, on_wall(side, 0.4)), (0.57, 0.04, 0.4), ST)
+
+# ── 砲塔下方：登塔梯與彈藥揚彈筒 ──
+for dz in (-0.75, -0.4):
+    inside.box((TX - 0.55, (FLOOR + CEIL) / 2, dz), (0.05, CEIL - FLOOR, 0.05), IST)
+for y in [FLOOR + 0.32 * k for k in range(1, 7)]:
+    inside.cylinder((TX - 0.55, y, -0.75), (TX - 0.55, y, -0.4), 0.018, 6, IST)
+inside.cylinder((TX + 0.65, FLOOR + 0.25, 0.6), (TX + 0.35, CEIL - 0.05, 0.5), 0.12, 14, IST)
+inside.box((TX + 0.65, FLOOR + 0.12, 0.6), (0.4, 0.24, 0.4), IST)
+inside.build('Interior', HULL_MATS, parent=root, bevel=0.008)
 
 # ───────────────────────────── 底架、連結器、制動 ─────────────────────────────
 frame = MeshBuilder()
@@ -231,10 +338,10 @@ for side in (-1, 1):
     det.lathe((MG_X, MG_Y, zs), (0, 0, side), [(-0.02, 0.56), (0.05, 0.56), (0.05, 0.47), (-0.02, 0.47)], 24, A, closed=True)
 
 # 車頂：艙口、通風蘑菇頭、扶手
-det.box((HATCH_X, ROOF + 0.04, 0), (0.95, 0.08, 0.95), A)
-det.box((HATCH_X, ROOF + 0.1, 0), (0.82, 0.05, 0.82), A)
-det.cylinder((HATCH_X - 0.42, ROOF + 0.12, -0.3), (HATCH_X - 0.42, ROOF + 0.12, 0.3), 0.04, 8, ST)
-det.box((HATCH_X + 0.25, ROOF + 0.16, 0), (0.05, 0.06, 0.3), ST)
+det.box((HATCH_X, ROOF + 0.04, HATCH_Z), (0.85, 0.08, 0.85), A)
+det.box((HATCH_X, ROOF + 0.1, HATCH_Z), (0.72, 0.05, 0.72), A)
+det.cylinder((HATCH_X - 0.37, ROOF + 0.12, HATCH_Z - 0.25), (HATCH_X - 0.37, ROOF + 0.12, HATCH_Z + 0.25), 0.04, 8, ST)
+det.box((HATCH_X + 0.22, ROOF + 0.16, HATCH_Z), (0.05, 0.06, 0.3), ST)
 for x in (-6.0, 6.8):
     det.cylinder((x, ROOF, 0), (x, ROOF + 0.18, 0), 0.1, 12, A)
     det.lathe((x, ROOF + 0.18, 0), (0, 1, 0), [(0, 0.24), (0.06, 0.22), (0.1, 0)], 14, A)
@@ -341,9 +448,16 @@ for tag, side, center in (('L', -1, math.pi / 2), ('R', 1, -math.pi / 2)):
     gun.cylinder((1.05, 0, 0), (1.38, 0, 0), 0.022, 10, 1)
     gun.lathe((0, 0, 0), (1, 0, 0), [(1.38, 0.022), (1.38, 0.03), (1.45, 0.034), (1.45, 0)], 10, 1)
     gun.box((0.62, 0.1, 0), (0.04, 0.06, 0.02), 1)
-    gun.build(f'MG_{tag}_Gun', [M_ARMOR, M_GUN], parent=pitch, bevel=0.0)
+    # 車內側：機匣、握把、保彈板
+    gun.box((-0.15, 0, 0), (0.5, 0.13, 0.11), 1)
+    gun.box((-0.02, 0.075, 0), (0.18, 0.03, 0.08), 1)
+    for dz in (-0.06, 0.06):
+        gun.cylinder((-0.45, -0.07, dz), (-0.45, 0.05, dz), 0.016, 8, 1)
+    gun.box((-0.43, -0.01, 0), (0.04, 0.03, 0.16), 1)
+    gun.box((-0.05, 0.02, -0.15), (0.22, 0.025, 0.1), 2)
+    gun.build(f'MG_{tag}_Gun', [M_ARMOR, M_GUN, M_BRASS], parent=pitch, bevel=0.0)
     empty(f'MG_{tag}_Muzzle', pitch, (1.45, 0, 0))
-    empty(f'MG_{tag}_Sight', pitch, (0.02, 0.24, 0))
+    empty(f'MG_{tag}_Sight', pitch, (0.05, 0.31, 0))
 
 # ───────────────────────────── 輸出 ─────────────────────────────
 glb = os.path.join(PROJECT, 'public', 'models', f'{NAME}.glb')
