@@ -150,8 +150,7 @@ export class CrewAI {
         const d = m.center.distanceTo(this._p);
         if (d >= best) continue;
         const dir = this._d.copy(m.center).sub(this._p).normalize();
-        const hit = this.terrain.raycast(this._p, dir, d);
-        if (hit != null && hit < d - 3) continue;
+        if (!this.enemies.hasLos(this._p, dir, d)) continue;
         best = d;
         ai.target = m;
         const sp = fromMil(2 + d / 180);
@@ -166,10 +165,10 @@ export class CrewAI {
     const vel = ai.last ? this._d.copy(m.center).sub(ai.last).divideScalar(Math.max(dt, 1e-3)) : this._d.set(0, 0, 0);
     ai.last = (ai.last ?? new THREE.Vector3()).copy(m.center);
     const aimPt = m.center.clone().addScaledVector(vel, tof);
-    aimPt.y += (d / 1000) ** 2 * 6; // 下墜補償
     const local = aimPt.sub(this._p).applyQuaternion(inv);
     const wantYaw = clamp(Math.atan2(-local.z, local.x) + ai.err[0], -st.mg.arc, st.mg.arc);
-    const wantPitch = clamp(Math.atan2(local.y, Math.hypot(local.x, local.z)) + ai.err[1], st.w.elevMin, st.w.elevMax);
+    // 下墜補償：依機槍彈的彈道解抬高射角
+    const wantPitch = clamp(Math.atan2(local.y, Math.hypot(local.x, local.z)) + this.enemies.elevation(d) + ai.err[1], st.w.elevMin, st.w.elevMax);
     const rate = 70 * DEG * dt;
     st.yaw += clamp(wantYaw - st.yaw, -rate, rate);
     st.pitch += clamp(wantPitch - st.pitch, -rate, rate);
@@ -281,8 +280,7 @@ export class CrewAI {
       const score = near * 2 + (m.horse ? 2 : 0) - d / 1000;
       if (score > bestScore) {
         const dir = m.center.clone().sub(muzzle).normalize();
-        const hit = this.terrain.raycast(muzzle, dir, d);
-        if (hit != null && hit < d - 10) continue;
+        if (!this.enemies.hasLos(muzzle, dir, d)) continue;
         bestScore = score;
         best = m;
       }

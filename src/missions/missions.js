@@ -55,7 +55,7 @@ export const LEVEL2 = {
     {
       enter: (c, st) => {
         c.radio('觀測哨', '北方約 1 公里發現敵騎兵一個小隊，正朝鐵道衝來！');
-        st.unit = c.enemies.spawnCavalry({ x: trainX(c) + 450, side: -1, dist: 850, count: 8, name: '北方敵騎兵' });
+        st.unit = c.enemies.spawnCavalry({ x: trainX(c) + 450, side: -1, dist: 750, count: 12, name: '北方敵騎兵' });
       },
       text: (c, st) => `擊退北方騎兵${unitText(st.unit)}`,
       hint: '機槍手會自動射擊；你也可以親自操作左側機槍，或下令十糎砲自由射擊。',
@@ -64,7 +64,7 @@ export const LEVEL2 = {
     {
       enter: (c, st) => {
         c.radio('本部', '南側村落附近有敵步兵一個班，配有輕機槍。建議停車，以主砲掃蕩。');
-        st.unit = c.enemies.spawnInfantry({ x: Math.min(trainX(c) + 650, 1300), side: 1, dist: 520, count: 10, lmg: 2, name: '南側敵步兵班' });
+        st.unit = c.enemies.spawnInfantry({ x: Math.min(trainX(c) + 650, 1300), side: 1, dist: 520, count: 12, lmg: 2, name: '南側敵步兵班' });
       },
       text: (c, st) => `殲滅或擊退南側敵步兵班${unitText(st.unit)}`,
       hint: '先在指揮台用觀測鏡標記敵群（測距手會補上精確距離），再按 C 下令十糎砲「砲擊選定目標」。',
@@ -77,8 +77,8 @@ export const LEVEL2 = {
     {
       enter: (c, st) => {
         c.radio('觀測哨', '注意！南方騎兵、北方步兵同時接近，敵軍企圖夾擊！');
-        st.a = c.enemies.spawnCavalry({ x: Math.min(trainX(c) + 400, 1450), side: 1, dist: 850, count: 8, name: '南方敵騎兵' });
-        st.b = c.enemies.spawnInfantry({ x: Math.min(trainX(c) + 700, 1450), side: -1, dist: 450, count: 8, lmg: 1, name: '北方敵步兵' });
+        st.a = c.enemies.spawnCavalry({ x: Math.min(trainX(c) + 400, 1450), side: 1, dist: 750, count: 10, name: '南方敵騎兵' });
+        st.b = c.enemies.spawnInfantry({ x: Math.min(trainX(c) + 700, 1450), side: -1, dist: 450, count: 10, lmg: 2, name: '北方敵步兵' });
       },
       text: (c, st) => `擊退南北夾擊：騎兵${unitText(st.a)}、步兵${unitText(st.b)}`,
       done: (c, st) => unitDone(st.a) && unitDone(st.b),
@@ -91,10 +91,10 @@ export const LEVEL2 = {
   ],
   rank(stats) {
     let score = 100;
-    score -= stats.crewLost * 6;
+    score -= stats.crewLost * 8;
     score -= stats.reservesUsed * 15;
-    score -= Math.max(0, stats.minutes - 12) * 2;
-    return score >= 85 ? 'S' : score >= 70 ? 'A' : score >= 55 ? 'B' : score >= 40 ? 'C' : 'D';
+    score -= Math.max(0, stats.minutes - 8) * 4;
+    return score >= 94 ? 'S' : score >= 75 ? 'A' : score >= 60 ? 'B' : score >= 40 ? 'C' : 'D';
   },
 };
 
@@ -184,13 +184,13 @@ export class MissionRunner {
       <table class="t-stats">
         <tr><th>完成時間</th><td>${Math.floor(secs / 60)} 分 ${secs % 60} 秒</td></tr>
         <tr><th>擊斃敵軍</th><td>${stats.killed}</td></tr>
-        <tr><th>擊退敵部隊</th><td>${c.enemies.repelled + c.enemies.units.filter((u) => u.state === 'gone').length}</td></tr>
+        <tr><th>擊退敵部隊</th><td>${c.enemies.units.filter((u) => u.state === 'gone' || u.state === 'retreat').length}／${c.enemies.units.length}</td></tr>
         <tr><th>我方乘員傷亡</th><td>${stats.crewLost}</td></tr>
         <tr><th>車廂被擊穿</th><td>${c.damage.penetrations} 次</td></tr>
         <tr><th>使用預備士兵</th><td>${stats.reservesUsed}</td></tr>
         <tr><th>十糎砲發射</th><td>${c.game.stats.shots}</td></tr>
       </table>
-      <p class="note">評等依乘員傷亡、預備士兵使用與完成時間計算。</p>
+      <p class="note">評等依乘員傷亡、預備士兵使用與完成時間計算（8 分鐘內、零傷亡才有 S）。</p>
       <div class="brief-btns">
         <button class="start-btn" data-goto="level:${this.def.id}">重新挑戰</button>
         <button class="start-btn secondary" data-goto="menu">回到關卡選單</button>

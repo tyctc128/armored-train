@@ -73,7 +73,7 @@ export class Damage {
       if (Math.random() < 0.5) g.audio.play('ping', point, 0.7);
       // 槍眼、觀察孔附近：小機率打進去傷到機槍手
       for (const mg of car.mgs) {
-        if (mg.base.position.distanceTo(local) < 0.6 && Math.random() < 0.12) {
+        if (mg.base.position.distanceTo(local) < 0.8 && Math.random() < 0.3) {
           const op = this.crew.operatorOf(car.stations.find((s) => s.ref === mg)?.obj);
           if (op) this.crew.kill(op);
         }
