@@ -260,6 +260,185 @@ export class GunStation {
   }
 }
 
+// ─────────────────────────────── 九七式曲射歩兵砲（迫砲） ───────────────────────────────
+// 裝定方位（密位）與距離（m），砲手依射表設定射角；曲射越過山稜。只能停車射擊。
+const MUZZLE_LOCAL = new THREE.Vector3(-Math.cos(60 * DEG) * 1.27, 0.06 + Math.sin(60 * DEG) * 1.27, 0);
+
+export class MortarStation {
+  constructor(game, car, ref) {
+    this.type = 'mortar';
+    this.game = game;
+    this.car = car;
+    this.ref = ref;
+    this.label = '電源車 九七式曲射歩兵砲';
+    this.w = WEAPONS.type97;
+    this.bearing = 0; // 密位，正北起算
+    this.range = 1000;
+    this.reload = 0;
+    this.ready = true;
+    this.ammo = { ...this.w.stock };
+    this.rounds = 0;
+    this.lookYaw = 0;
+    this.lookPitch = 0.12;
+    this.shake = 0;
+    this.report = null; // 最近一次觀測哨回報
+    this._init = false;
+  }
+
+  get table() {
+    return this.w.table;
+  }
+
+  // 依射表求射角（密位）；射程外回傳 null
+  elevMil(range = this.range) {
+    const t = this.table;
+    if (range < t.minRange || range > t.maxRange) return null;
+    return lookupElevation(t, range);
+  }
+
+  enter() {
+    if (!this._init) {
+      // 第一次上崗：方位朝列車左側（北方）
+      this._init = true;
+      const q = this.car.group.getWorldQuaternion(new THREE.Quaternion());
+      const left = new THREE.Vector3(0, 0, -1).applyQuaternion(q);
+      this.bearing = Math.round(bearingMil(left.x, left.z) / 10) * 10;
+    }
+  }
+
+  exit() {}
+
+  // 依目標簿裝定
+  layOn(entry) {
+    if (!entry) {
+      this.game.message('目標簿沒有選定的目標', 'alert');
+      return;
+    }
+    // 目標簿的方位、距離以記錄者位置為準；有座標時改從迫砲位置重新計算
+    if (entry.point) {
+      const m = this.ref.node.getWorldPosition(new THREE.Vector3());
+      this.bearing = Math.round(bearingMil(entry.point.x - m.x, entry.point.z - m.z));
+      this.range = Math.round(Math.hypot(entry.point.x - m.x, entry.point.z - m.z) / 10) * 10;
+    } else {
+      this.bearing = Math.round(entry.bearing);
+      this.range = Math.round(entry.range / 10) * 10;
+    }
+    this.game.message(`迫砲裝定：方位 ${fmtMil(this.bearing)}、距離 ${this.range} m（${entry.id}）`);
+    this.game.emit('mortarLay', { station: this, entry });
+  }
+
+  update(dt, input, active) {
+    const g = this.game;
+    if (!this.ready) {
+      this.reload += dt / this.w.reloadTime;
+      if (this.reload >= 1) {
+        this.ready = true;
+        this.reload = 0;
+      }
+    }
+    if (active) {
+      this.lookYaw = clamp(this.lookYaw - input.mouseDX * 0.0022, -1.2, 1.2);
+      this.lookPitch = clamp(this.lookPitch - input.mouseDY * 0.0022, -0.4, 0.9);
+      const fine = input.down('ShiftLeft') || input.down('ShiftRight');
+      const db = fine ? 1 : 10;
+      const dr = fine ? 10 : 50;
+      if (input.hit('KeyA') || input.hit('ArrowLeft')) this.bearing -= db;
+      if (input.hit('KeyD') || input.hit('ArrowRight')) this.bearing += db;
+      if (input.hit('KeyW') || input.hit('ArrowUp')) this.range += dr;
+      if (input.hit('KeyS') || input.hit('ArrowDown')) this.range -= dr;
+      this.bearing = ((this.bearing % 6400) + 6400) % 6400;
+      this.range = clamp(this.range, 100, 3000);
+      if (input.hit('BracketLeft')) g.targetBook.cycle(-1);
+      if (input.hit('BracketRight')) g.targetBook.cycle(1);
+      if (input.hit('KeyF')) this.layOn(g.targetBook.selected());
+      if (input.btnHit(0)) this.fire();
+    }
+    // 砲身轉向裝定方位
+    const dir = this.dirWorld(new THREE.Vector3());
+    const inv = this.car.group.getWorldQuaternion(new THREE.Quaternion()).invert();
+    dir.applyQuaternion(inv);
+    this.ref.node.rotation.y = Math.atan2(dir.z, -dir.x);
+    this.shake = Math.max(0, this.shake - dt * 0.2);
+  }
+
+  dirWorld(out) {
+    const b = fromMil(this.bearing);
+    return out.set(Math.sin(b), 0, -Math.cos(b));
+  }
+
+  fire() {
+    const g = this.game;
+    if (Math.abs(g.train.speed) > 0.3) {
+      g.message('行進間無法射擊迫砲，請先停車', 'alert');
+      return;
+    }
+    if (!this.ready) {
+      g.message('裝填中…', 'alert');
+      return;
+    }
+    if (this.ammo.HE <= 0) {
+      g.message('迫砲彈已用罄', 'alert');
+      return;
+    }
+    const elev = this.elevMil();
+    if (elev == null) {
+      g.message(`射程外（${this.table.minRange}–${this.table.maxRange} m）`, 'alert');
+      return;
+    }
+    const shell = this.w.shells[0];
+    const d = this.w.dispersionMil;
+    const b = fromMil(this.bearing + gaussian() * d * 0.5);
+    const e = fromMil(elev + gaussian() * d * 0.25);
+    const v0 = shell.v0 * (1 + gaussian() * 0.004);
+    const vel = new THREE.Vector3(Math.sin(b) * Math.cos(e), Math.sin(e), -Math.cos(b) * Math.cos(e)).multiplyScalar(v0);
+    const muzzle = this.muzzle(new THREE.Vector3());
+    g.projectiles.spawn({ pos: muzzle, vel, k: this.w.C * shell.form, kind: 'shell', shell, weapon: this.w, source: this });
+    g.effects.muzzleFlash(muzzle, vel.clone().normalize(), 1.2);
+    g.audio.play('cannon', muzzle, 0.55);
+    this.ammo.HE--;
+    this.rounds++;
+    g.stats.shots++;
+    this.ready = false;
+    this.reload = 0;
+    this.shake = 0.02;
+    g.emit('mortarFire', { station: this });
+  }
+
+  muzzle(out) {
+    return out.copy(MUZZLE_LOCAL).applyMatrix4(this.ref.node.matrixWorld);
+  }
+
+  applyCamera(camera) {
+    // 站在砲後方，視線朝裝定方位
+    const base = this.ref.node.getWorldPosition(_v);
+    const dir = this.dirWorld(_d);
+    camera.position.copy(base).addScaledVector(dir, -1.3);
+    camera.position.y += 1.65;
+    const yaw = Math.atan2(-dir.z, dir.x) + this.lookYaw;
+    _e.set(this.lookPitch, yaw - Math.PI / 2, 0, 'YXZ');
+    camera.quaternion.setFromEuler(_e);
+    camera.fov = 70;
+    shake(camera, this.shake);
+  }
+
+  hud() {
+    const g = this.game;
+    const entry = g.targetBook.selected();
+    const elev = this.elevMil();
+    const moving = Math.abs(g.train.speed) > 0.3;
+    const state = moving ? '<span class="warn">行進中，無法射擊</span>' : this.ready ? '<span class="ok">待發</span>　左鍵發射' : `裝填中 <div class="bar"><i style="width:${(this.reload * 100).toFixed(0)}%"></i></div>`;
+    const r = this.report;
+    return `
+      <div class="acc">${this.label}</div>
+      <div><span class="k">方位</span> <b>${fmtMil(this.bearing)}</b> 密位　<span class="k">距離</span> <b>${this.range}</b> m</div>
+      <div><span class="k">射角</span> ${elev == null ? `<span class="warn">射程外（${this.table.minRange}–${this.table.maxRange} m）</span>` : `${elev.toFixed(0)} 密位`}　<span class="k">榴弾</span> ${this.ammo.HE}</div>
+      <div>${state}</div>
+      <div><span class="k">目標簿</span> ${entry ? `${entry.id} 方位 ${fmtMil(entry.bearing)}・${entry.range} m（${entry.method}）` : '—'}</div>
+      ${r ? `<div><span class="k">觀測哨回報</span> <span class="acc">${r}</span></div>` : ''}
+      <div class="k">A/D：方位 ±10（Shift ±1）　W/S：距離 ±50（Shift ±10）　[ ]：選目標　F：依目標裝定　T：射表　E：離開</div>`;
+  }
+}
+
 // ─────────────────────────────── 九二式重機槍 ───────────────────────────────
 export class MgStation {
   constructor(game, car, mg, pool) {

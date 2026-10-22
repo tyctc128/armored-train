@@ -37,4 +37,16 @@ export const WEAPONS = {
     poolPerCar: 3000,
     shells: [{ id: 'BALL', name: '普通弾', mass: 0.0132, v0: 750, form: 1.0, he: false }],
   },
+  type97: {
+    id: 'type97',
+    name: '九七式曲射歩兵砲',
+    short: '迫砲',
+    maxRange: 2850,
+    reloadTime: 4, // 砲組裝填（彈從砲口滑入）
+    elevMin: 45 * DEG,
+    elevMax: 85 * DEG,
+    dispersionMil: 6, // 迫砲散布較大（射程與方向各約 6 密位）
+    stock: { HE: 36 },
+    shells: [{ id: 'HE', name: '榴弾', mass: 3.3, v0: 196, form: 1.0, he: true, pen: 25 }],
+  },
 };

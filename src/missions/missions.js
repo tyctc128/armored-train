@@ -1,10 +1,12 @@
 // 關卡定義與任務流程。第一關是教學（src/tutorial），第二關起由 MissionRunner 執行。
+import * as THREE from 'three';
+import { bearingMil, fmtMil } from '../core/math.js';
 
 export const LEVELS = [
   { id: 1, name: '試驗運行', sub: '教學關：學會移動、指揮、機槍、測距與主砲', ready: true },
   { id: 2, name: '沿線巡邏', sub: '指揮軍士擊退騎兵與步兵的襲擾，抵達終點站', ready: true },
   { id: 3, name: '斷軌', sub: '工兵炸毀鐵軌，在敵火下下車搶修', ready: true },
-  { id: 4, name: '山谷伏擊', sub: '敵軍躲在稜線後，以迫砲與觀測修正反擊', ready: false },
+  { id: 4, name: '山谷伏擊', sub: '敵軍躲在稜線後，以迫砲與觀測修正反擊', ready: true },
   { id: 5, name: '鋼鐵對決', sub: '迎戰敵方裝甲列車', ready: false },
 ];
 
@@ -198,6 +200,116 @@ export const LEVEL3 = {
   rankNote: '評等依乘員傷亡、預備士兵使用與完成時間計算（10 分鐘內、零傷亡才有 S）。',
 };
 
+// ── 第四關：山谷伏擊 ──
+// 敵迫砲陣地在鐵道北方約 1.4 km 的稜線後方（從鐵道看不到）
+const BATTERY = [
+  { x: 340, z: -1320 },
+  { x: 362, z: -1315 },
+];
+const batteryText = (c) => `（擊毀 ${c.battery.destroyed}／${c.battery.total}）`;
+
+// 觀測哨回報彈著偏差：以「迫砲→目標」為射向，遠近、左右（公尺），並換算方位密位
+function spotReport(c, point) {
+  const st = c.mortar;
+  const m = st.ref.node.getWorldPosition(new THREE.Vector3());
+  let tgt = null;
+  let best = 1e9;
+  for (const g of c.battery.guns) {
+    if (!g.alive) continue;
+    const d = Math.hypot(point.x - g.pos.x, point.z - g.pos.z);
+    if (d < best) {
+      best = d;
+      tgt = g;
+    }
+  }
+  if (!tgt) return null;
+  if (best > 600) return '彈著不明，未能觀測';
+  const ux = tgt.pos.x - m.x;
+  const uz = tgt.pos.z - m.z;
+  const L = Math.hypot(ux, uz);
+  const ex = point.x - tgt.pos.x;
+  const ez = point.z - tgt.pos.z;
+  const over = (ex * ux + ez * uz) / L;
+  const right = (ex * -uz + ez * ux) / L;
+  const r10 = (v) => Math.round(Math.abs(v) / 10) * 10;
+  if (Math.hypot(over, right) < 12) return '彈著良好，就在目標附近！保持諸元，繼續射擊！';
+  const mil = Math.round(Math.abs(right) / (L / 1000));
+  return `${over > 0 ? '遠' : '近'} ${r10(over)} m、${right > 0 ? '右' : '左'} ${r10(right)} m（方位約 ${mil} 密位）`;
+}
+
+export const LEVEL4 = {
+  id: 4,
+  title: '山谷伏擊',
+  intro: [
+    ['本部', '第一裝甲列車隊注意：前方山谷一帶有敵軍活動，命你部巡邏至終點站。'],
+    ['副官', '山谷北側是連綿的稜線，敵人若躲在後面，十糎砲直接瞄準打不到。'],
+    ['副官', '電源車後段的九七式曲射歩兵砲可以曲射越過稜線。友軍觀測哨在高地上，會回報彈著。'],
+  ],
+  phases: [
+    {
+      text: '以傳令鐘下令「微速」以上，向東出發巡邏',
+      done: (c) => c.train.acknowledged >= 2,
+    },
+    {
+      text: '巡邏前進，進入山谷',
+      done: (c) => c.train.sFront >= 1450,
+    },
+    {
+      enter: (c, st) => {
+        c.battery.spawn(BATTERY, { interval: 22, firstDelay: 3 });
+        c.radio('觀測哨', '注意！北方稜線後方有敵迫砲陣地，正在對列車試射！');
+        st.intelT = 7;
+      },
+      text: (c) => `停車，以迫砲擊毀稜線後的敵迫砲陣地${batteryText(c)}`,
+      hint: '① 停車　② 按 8 走到電源車後段迫砲座，按 E 上崗　③ 用 [ ] 選目標簿的「觀測哨」目標，按 F 裝定　④ 左鍵發射　⑤ 依觀測哨回報修正：遠就按 S 減距離、右就按 A 往左修方位。列車移動時敵人要重新試射，但迫砲只能停車射擊。',
+      done: (c, st, dt) => {
+        // 觀測哨報告敵陣位置（記入目標簿；誤差約 ±60 m）
+        if (st.intelT != null) {
+          st.intelT -= dt;
+          if (st.intelT <= 0) {
+            st.intelT = null;
+            const cx = (BATTERY[0].x + BATTERY[1].x) / 2 + (Math.random() - 0.5) * 120;
+            const cz = (BATTERY[0].z + BATTERY[1].z) / 2 + (Math.random() - 0.5) * 120;
+            const m = c.mortar.ref.node.getWorldPosition(new THREE.Vector3());
+            const e = c.game.targetBook.add({ bearing: bearingMil(cx - m.x, cz - m.z), range: Math.round(Math.hypot(cx - m.x, cz - m.z) / 50) * 50, method: '觀測哨', point: new THREE.Vector3(cx, 0, cz) });
+            c.radio('觀測哨', `敵迫砲陣地：自迫砲座方位約 ${fmtMil(e.bearing)}、距離約 ${e.range} m。已記入目標簿 ${e.id}。`);
+          }
+        }
+        // 第一門被毀或交戰 90 秒後，南側步兵前來牽制
+        if (!st.inf && (c.battery.destroyed >= 1 || (st.t = (st.t ?? 0) + dt) > 90)) {
+          c.radio('觀測哨', '南側山坡有敵步兵一個班下來了！');
+          st.inf = c.enemies.spawnInfantry({ x: Math.min(trainX(c) + 200, 1400), side: 1, dist: 520, count: 10, lmg: 2, name: '南側敵步兵' });
+        }
+        return c.battery.destroyed >= c.battery.total;
+      },
+    },
+    {
+      enter: (c) => c.radio('觀測哨', '敵迫砲陣地全部沉默！幹得好！'),
+      text: '抵達終點站（里程 3.0 km 以後）並停車',
+      done: (c) => c.train.sFront >= c.train.track.length - 260 && Math.abs(c.train.speed) < 0.2 && c.player.level !== 'ground',
+    },
+  ],
+  onEvent(c, type, data) {
+    if (type === 'mortarImpact' && c.battery.active) {
+      const text = data.destroyed ? '命中！敵迫砲一門被擊毀！' : spotReport(c, data.point);
+      if (!text) return;
+      c.mortar.report = text;
+      setTimeout(() => c.radio('觀測哨', text), 1200);
+    }
+    if (type === 'batteryLost') c.game.message('列車移動了，敵迫砲需要重新試射', 'radio');
+  },
+  fail: (c) => (c.damage.penetrations >= 12 ? '列車遭敵砲火重創，無法繼續作戰' : null),
+  rank(stats) {
+    let score = 100;
+    score -= stats.crewLost * 8;
+    score -= stats.reservesUsed * 15;
+    score -= stats.penetrations * 3;
+    score -= Math.max(0, stats.minutes - 12) * 4;
+    return score >= 94 ? 'S' : score >= 75 ? 'A' : score >= 60 ? 'B' : score >= 40 ? 'C' : 'D';
+  },
+  rankNote: '評等依乘員傷亡、預備士兵、車廂被擊穿次數與完成時間計算（12 分鐘內、零傷亡、未被擊穿才有 S）。',
+};
+
 // 任務執行：依序推進階段，顯示目標，判定成功與失敗
 export class MissionRunner {
   constructor(ctx) {
@@ -229,14 +341,17 @@ export class MissionRunner {
 
   onEvent(type, data) {
     if (!this.active) return;
+    this.def.onEvent?.(this.ctx, type, data);
     if (type === 'playerDead' && data.final) this.finish(false, '指揮官陣亡');
     if (type === 'derailed') this.finish(false, '列車衝過斷軌處而出軌');
   }
 
-  update() {
+  update(dt = 1 / 60) {
     if (!this.active) return;
+    const reason = this.def.fail?.(this.ctx);
+    if (reason) return this.finish(false, reason);
     const ph = this.def.phases[this.index];
-    if (ph.done(this.ctx, this.state)) {
+    if (ph.done(this.ctx, this.state, dt)) {
       this.ctx.game.audio.play('bell', null, 0.35);
       this.next();
       return;
@@ -275,6 +390,7 @@ export class MissionRunner {
       crewLost: c.crew.casualties,
       reservesUsed: this.startReserves - c.damage.reserves,
       killed: c.enemies.killed,
+      penetrations: c.damage.penetrations,
     };
     const rank = success ? this.def.rank(stats) : '—';
     if (success) saveCleared(this.def.id, rank);
@@ -289,7 +405,8 @@ export class MissionRunner {
         <tr><th>我方乘員傷亡</th><td>${stats.crewLost}</td></tr>
         <tr><th>車廂被擊穿</th><td>${c.damage.penetrations} 次</td></tr>
         <tr><th>使用預備士兵</th><td>${stats.reservesUsed}</td></tr>
-        <tr><th>十糎砲發射</th><td>${c.game.stats.shots}</td></tr>
+        <tr><th>${this.def.id === 4 ? '砲彈發射（十糎砲＋迫砲）' : '十糎砲發射'}</th><td>${c.game.stats.shots}</td></tr>
+        ${this.def.id === 4 ? `<tr><th>擊毀敵迫砲</th><td>${c.battery.destroyed}／${c.battery.total}</td></tr>` : ''}
       </table>
       <p class="note">${this.def.rankNote}</p>
       <div class="brief-btns">

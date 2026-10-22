@@ -95,6 +95,22 @@ export class Damage {
     return true;
   }
 
+  // 敵砲彈爆炸的破片：暴露位置的玩家與乘員
+  splash(point) {
+    const g = this.game;
+    const exposed = (g.mode === 'walk' && g.player.exposed) || (g.mode === 'station' && g.station?.type === 'mortar');
+    if (exposed && !this.dead) {
+      const d = g.camera.position.distanceTo(point);
+      if (d < 4) this.hurt(60 + Math.random() * 30, '被砲彈破片擊中');
+      else if (d < 14 && Math.random() < (14 - d) / 14) this.hurt(20 + Math.random() * 25, '被砲彈破片擊中');
+    }
+    for (const m of this.crew.members) {
+      if (!m.alive || !m.exposed) continue;
+      const d = this.crew.sphere(m, this._a).distanceTo(point);
+      if (d < 4 || (d < 12 && Math.random() < (12 - d) / 16)) this.crew.kill(m);
+    }
+  }
+
   hurt(amount, cause = '中彈') {
     if (this.dead) return;
     this.hp = clamp(this.hp - amount, 0, 100);

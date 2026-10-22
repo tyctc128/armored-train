@@ -60,7 +60,7 @@ export class Crew {
             this.add(car, { variant: 'soldier', name: nextName('七糎砲手'), x: st.x + 0.4, z: dz, y: car.roofY + 0.22, yaw: Math.PI, pose: 'operate', exposed: true,
               lines: ['七糎砲待命！'] });
           }
-        } else if (st.type === 'locked' && car.kind === 'power') {
+        } else if (st.type === 'mortar') {
           // 敞頂迫砲座的砲組（暴露位置）
           for (const dz of [-0.75, 0.75]) {
             this.add(car, { variant: 'soldier', name: nextName('迫砲手'), x: st.x + 0.3, z: dz, yaw: Math.PI, pose: 'stand', exposed: true,

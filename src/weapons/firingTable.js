@@ -1,4 +1,4 @@
-import { simulateFlat, maxRange, elevationForRange, airDensityRatio } from './ballistics.js';
+import { simulateFlat, maxRange, elevationForRange, highAngleElevation, airDensityRatio } from './ballistics.js';
 import { toMil } from '../core/math.js';
 
 // 依彈道模型逐列計算射表（標準條件：15°C、無風、砲目同高）
@@ -43,4 +43,17 @@ export function lookupElevation(table, range) {
     }
   }
   return rows[rows.length - 1].elevMil;
+}
+
+// 迫砲射表（曲射）：每 50 m 一列，表尺為射角密位
+export function buildMortarTable(weapon, shell) {
+  const k = weapon.C * shell.form;
+  const rows = [];
+  for (let r = 300; r <= weapon.maxRange; r += 50) {
+    const e = highAngleElevation(r, shell.v0, k, { dt: 0.02 }, weapon.elevMax);
+    if (e == null) continue;
+    const res = simulateFlat(shell.v0, e, k, { dt: 0.02 });
+    rows.push({ range: r, elevMil: toMil(e), tof: res.tof });
+  }
+  return { shell, rows, maxRange: rows.length ? rows[rows.length - 1].range : 0, minRange: rows.length ? rows[0].range : 0 };
 }

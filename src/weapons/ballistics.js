@@ -98,6 +98,21 @@ export function calibrateDrag(v0, targetMaxRange) {
   return Math.exp((lo + hi) / 2);
 }
 
+// 曲射彈道解（迫砲）：最大射程射角與 maxElev 之間，射角越大射程越近；射程外回傳 null
+export function highAngleElevation(range, v0, k, opts = {}, maxElev = (85 * Math.PI) / 180) {
+  const top = maxRange(v0, k, opts);
+  if (range > top.range) return null;
+  let lo = top.elev;
+  let hi = maxElev;
+  if (simulateFlat(v0, hi, k, opts).range > range) return null;
+  for (let i = 24; i > 0; i--) {
+    const mid = (lo + hi) / 2;
+    if (simulateFlat(v0, mid, k, opts).range > range) lo = mid;
+    else hi = mid;
+  }
+  return (lo + hi) / 2;
+}
+
 // 低伸彈道解：給定距離求射角（rad），超出射程回傳 null
 export function elevationForRange(range, v0, k, opts = {}, maxElev) {
   let lo = 0;

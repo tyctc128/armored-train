@@ -102,6 +102,12 @@ export function helpHtml() {
       <div><kbd>[</kbd><kbd>]</kbd> 切換目標簿選定目標</div>
     </div>
     <div>
+      <h3>九七式曲射歩兵砲（電源車後段）</h3>
+      <div><kbd>A</kbd>/<kbd>D</kbd> 方位 ±10 密位、<kbd>W</kbd>/<kbd>S</kbd> 距離 ±50 m（<kbd>Shift</kbd> 微調）</div>
+      <div><kbd>[</kbd><kbd>]</kbd> 選目標、<kbd>F</kbd> 依目標裝定、左鍵發射（停車時）</div>
+      <div>曲射越過山稜；依觀測哨回報修正彈著</div>
+    </div>
+    <div>
       <h3>九二式重機槍（全列車 11 處）</h3>
       <div>左鍵連射（每分 450 發）、30 發保彈板，按住 <kbd>R</kbd> 換板</div>
       <div>注意槍管過熱</div>
@@ -144,6 +150,41 @@ export function level2BriefHtml() {
     <button class="start-btn" data-goto="start:2">出發</button>
     <button class="start-btn secondary" data-goto="menu">返回</button>
   </div>`;
+}
+
+export function level4BriefHtml() {
+  return `
+  <h2>電報：第四關　山谷伏擊</h2>
+  <div>第一裝甲列車隊 指揮官 收</div>
+  <div>前方山谷一帶有敵軍活動。命你部巡邏至終點站，沿途<b>摧毀敵火力據點</b>，確保後續列車通行。</div>
+  <h3>情報</h3>
+  <div>敵軍可能在北側稜線後方設置迫擊砲陣地。稜線擋住視線，十糎砲直接瞄準打不到，敵彈卻能從頭頂落下，擊穿車頂、殺傷暴露位置的人員。</div>
+  <div>敵迫砲會逐發試射修正，彈著越來越近；列車移動 80 m 以上，敵軍就得重新試射。</div>
+  <h3>迫砲射擊要領（電源車後段，按 <kbd>8</kbd> 前往）</h3>
+  <div>① <b>停車</b>：迫砲只能在停車時射擊。</div>
+  <div>② <b>裝定</b>：用 <kbd>[</kbd> <kbd>]</kbd> 選目標簿裡觀測哨報的目標，按 <kbd>F</kbd> 自動裝定方位、距離；砲手依射表設定射角（<kbd>T</kbd> 可看射表）。</div>
+  <div>③ <b>發射與修正</b>：左鍵發射。觀測哨會回報彈著偏差，例如「遠 120 m、右 40 m（方位約 27 密位）」——就按 <kbd>S</kbd> 減距離、按 <kbd>A</kbd> 往左修方位（<kbd>Shift</kbd> 微調）。</div>
+  <div>④ 回報「彈著良好」時保持諸元繼續射擊，直到敵砲擊毀。</div>
+  <div class="note">迫砲座是敞頂的暴露位置。車廂被擊穿 12 次即任務失敗；指揮官陣亡時由預備士兵接替（3 名）。12 分鐘內、零傷亡、未被擊穿才有 S。</div>
+  <div class="brief-btns">
+    <button class="start-btn" data-goto="start:4">出發</button>
+    <button class="start-btn secondary" data-goto="menu">返回</button>
+  </div>`;
+}
+
+export function mortarTableHtml(weapon) {
+  const t = weapon.table;
+  const rows = t.rows
+    .filter((r) => r.range % 100 === 0)
+    .map((r) => `<tr><td>${r.range.toLocaleString()}</td><td><b>${r.elevMil.toFixed(0)}</b></td><td>${r.tof.toFixed(1)}</td></tr>`)
+    .join('');
+  return `
+  <h2>射表手冊　${weapon.name}（曲射）</h2>
+  <div class="note">射程 ${t.minRange.toLocaleString()}–${t.maxRange.toLocaleString()} m。射角越大落得越近（曲射）。砲手會依裝定距離自動設定射角；本表供參考。修正方位時：距離每 1,000 m，1 密位約偏 1 m。</div>
+  <table>
+    <thead><tr><th>距離 m</th><th>射角（密位）</th><th>飛行時間 s</th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table>`;
 }
 
 export function level3BriefHtml() {

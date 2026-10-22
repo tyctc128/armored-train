@@ -3,7 +3,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { CARS, OPS } from './guideData.js';
 
-const STATION_ICON = { gun: '砲', mg: '槍', console: '指', rangefinder: '測' };
+const STATION_ICON = { gun: '砲', mg: '槍', console: '指', rangefinder: '測', mortar: '迫' };
 const ease = (t) => (t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2);
 
 // 車廂圖鑑：左側車廂清單、中間可旋轉的 3D 模型與標註點、右側介紹／內裝／操作

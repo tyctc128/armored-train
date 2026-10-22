@@ -412,6 +412,7 @@ function swapToModel(car, model) {
   if (car.rangefinder) Object.assign(car.rangefinder, { yawG: nodes.RF_Yaw, anchor: nodes.RF_Anchor });
   if (car.console) car.console.anchor = nodes.ConsoleAnchor;
   if (car.chimney) car.chimney = nodes.Chimney;
+  if (car.mortar) car.mortar.node = g.getObjectByName('Mortar') ?? car.mortar.node;
 }
 
 function buildGunCarC(mats) {
@@ -637,13 +638,19 @@ function buildPower(mats) {
   back.position.set(-len / 2 + 0.04, HULL_Y0 + 0.75, 0);
   car.group.add(back);
 
+  // 迫砲（整組繞底鈑轉向；砲口預設朝車尾 -X、仰角 60°）
+  const mortar = new THREE.Group();
+  mortar.name = 'Mortar';
+  mortar.position.set(-4.6, FLOOR_Y, 0);
   const plate = mesh(box(0.6, 0.05, 0.6), mats.steel);
-  plate.position.set(-4.6, FLOOR_Y + 0.03, 0);
+  plate.position.set(0, 0.03, 0);
   const tubeM = mesh(new THREE.CylinderGeometry(0.05, 0.05, 1.25, 10), mats.gun);
-  tubeM.position.set(-4.6 - 0.31, FLOOR_Y + 0.55, 0);
+  tubeM.position.set(-0.31, 0.6, 0);
   tubeM.rotation.z = 30 * DEG;
-  car.group.add(plate, tubeM);
-  car.stations.push({ type: 'locked', x: -4.6, lat: 0.6, label: '九七式曲射歩兵砲（M4 開放）' });
+  mortar.add(plate, tubeM);
+  car.group.add(mortar);
+  car.mortar = { node: mortar };
+  car.stations.push({ type: 'mortar', x: -4.0, lat: 0.6, label: '九七式曲射歩兵砲', ref: car.mortar });
 
   const mastGeo = new THREE.CylinderGeometry(0.03, 0.04, 3.5, 6);
   for (const x of [x0 - 2.5, x0 + 2.5]) {
