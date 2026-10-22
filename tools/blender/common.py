@@ -203,14 +203,17 @@ def srgb(hex_or_tuple):
 
 
 def save_image(name, rgb, folder):
-    """rgb: (n, n, 3) 的 sRGB 0–1 陣列，第 0 列為影像上緣。"""
+    """rgb: (n, n, 3) 的 sRGB 0–1 陣列，第 0 列為影像上緣。
+    貼圖已存在時直接載入（內容固定由種子決定），避免多個腳本同時寫同一檔案。"""
+    path = os.path.join(folder, f'{name}.png')
+    if os.path.exists(path):
+        return bpy.data.images.load(path, check_existing=True)
     n = rgb.shape[0]
     img = bpy.data.images.new(name, n, n, alpha=False)
     rgba = np.ones((n, n, 4), dtype=np.float32)
     rgba[:, :, :3] = np.clip(rgb[::-1], 0, 1)  # Blender 像素由下往上
     img.pixels.foreach_set(rgba.ravel())
     os.makedirs(folder, exist_ok=True)
-    path = os.path.join(folder, f'{name}.png')
     img.filepath_raw = path
     img.file_format = 'PNG'
     img.save()
@@ -321,6 +324,12 @@ def export_glb(root, path):
         export_lights=False,
         export_image_format='JPEG',
         export_jpeg_quality=88,
+        # Draco 幾何壓縮（遊戲端以 DRACOLoader 解碼）
+        export_draco_mesh_compression_enable=True,
+        export_draco_mesh_compression_level=6,
+        export_draco_position_quantization=14,
+        export_draco_normal_quantization=10,
+        export_draco_texcoord_quantization=12,
     )
 
 

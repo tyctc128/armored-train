@@ -27,18 +27,32 @@ npm run dev
 
 ## Blender 模型
 
-車廂模型由 `tools/blender/` 的 Python 腳本驅動 Blender 產生（目前完成火砲車甲；其餘車廂仍用程式建模）。
+8 節車廂模型都由 `tools/blender/` 的 Python 腳本驅動 Blender 產生；共用零件（車體、車內結構、內裝、底架、機槍）在 `parts.py`。
+
+| 車廂 | 腳本 |
+|---|---|
+| 警戒車 | `guard_car.py` |
+| 火砲車甲／乙 | `gun_car.py -- A`／`gun_car.py -- B` |
+| 火砲車丙 | `gun_car_c.py` |
+| 指揮車 | `command_car.py` |
+| 機關車 | `locomotive.py` |
+| 炭水車 | `tender_car.py` |
+| 電源車 | `power_car.py` |
 
 ```bash
-"C:\Program Files\Blender Foundation\Blender 5.2\blender.exe" -b --factory-startup -P tools/blender/gun_car.py -- A
+powershell -File tools/blender/build_all.ps1
 ```
 
-會產生：
-- `public/models/gun_car_a.glb`：遊戲載入
-- `assets/blender/gun_car_a.blend`：可用 Blender 開啟檢視、修改
-- `docs/preview/gun_car_a.png`：預覽圖
+每節會產生：
+- `public/models/<名稱>.glb`：遊戲載入（Draco 壓縮，解碼器在 `public/draco/`）
+- `assets/blender/<名稱>.blend`：可用 Blender 開啟檢視、修改
+- `docs/preview/<名稱>.png`：預覽圖
 
-手動修改 .blend 後，請自行匯出成同名 .glb；重新執行腳本會覆蓋手動修改。節點名稱（Turret、Elev、Muzzle、Sight、MG_L_*、Wheelset_* 等）遊戲會用到，請勿更名。
+注意：
+- 手動修改 .blend 後，請自行匯出成同名 .glb；重新執行腳本會覆蓋手動修改。
+- 節點名稱（Turret、Elev、Muzzle、Sight、MG_*、RF_Yaw、ConsoleAnchor、Chimney、Wheelset_* 等）遊戲會用到，請勿更名；缺節點的模型會自動退回程式建模。
+- 車廂尺寸須與 `src/train/carModels.js` 的程式建模一致（走動範圍、崗位位置都依它判定）。
+- 開發伺服器不監看 `public/models`（避免 Blender 寫檔時中斷），新增模型檔後要重新啟動 `npm run dev`。
 
 ## 目錄
 

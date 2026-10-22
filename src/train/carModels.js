@@ -240,7 +240,7 @@ function makeGunTurret(mats, { ringR = 1.55, bodyH = 1.15, barrelLen = 4.4, barr
 }
 
 // 九二式重機槍球形槍架：base（固定朝向）→ yawG → pitchG
-function makeMgMount(mats, { x, y, z, center, arc, label }) {
+function makeMgMount(mats, { x, y, z, center, arc, label, tag }) {
   const base = new THREE.Group();
   base.position.set(x, y, z);
   base.rotation.y = center;
@@ -272,7 +272,7 @@ function makeMgMount(mats, { x, y, z, center, arc, label }) {
   const sight = new THREE.Object3D();
   sight.position.set(0.02, 0.24, 0);
   pitchG.add(sight);
-  return { base, yawG, pitchG, muzzle, sight, center, arc, label };
+  return { base, yawG, pitchG, muzzle, sight, center, arc, label, tag };
 }
 
 function baseCar(name, kind, len) {
@@ -333,8 +333,8 @@ function buildGuard(mats) {
   car.group.add(slBase, sl, lens);
 
   addMgs(car, mats, [
-    { x: len / 2 - 1.4, y: 2.35, z: -w / 2, center: 35 * DEG, arc: 75 * DEG, label: '警戒車 左前機槍' },
-    { x: len / 2 - 1.4, y: 2.35, z: w / 2, center: -35 * DEG, arc: 75 * DEG, label: '警戒車 右前機槍' },
+    { x: len / 2 - 1.4, y: 2.35, z: -w / 2, center: 35 * DEG, arc: 75 * DEG, label: '警戒車 左前機槍', tag: 'FL' },
+    { x: len / 2 - 1.4, y: 2.35, z: w / 2, center: -35 * DEG, arc: 75 * DEG, label: '警戒車 右前機槍', tag: 'FR' },
   ]);
   car.hatches = [-1.5];
   car.obstacles = [{ x: len / 2 - 0.7, z: 0, r: 0.5 }];
@@ -363,8 +363,8 @@ function buildGunCar(mats, high) {
   car.gun = gun;
   car.stations.push({ type: 'gun', x: tx, lat: 0, label: `${name} 十四年式十糎高射砲`, ref: gun });
   addMgs(car, mats, [
-    { x: -4.6, y: 2.3, z: -w / 2, center: 90 * DEG, arc: 75 * DEG, label: `${name} 左側機槍` },
-    { x: -4.6, y: 2.3, z: w / 2, center: -90 * DEG, arc: 75 * DEG, label: `${name} 右側機槍` },
+    { x: -4.6, y: 2.3, z: -w / 2, center: 90 * DEG, arc: 75 * DEG, label: `${name} 左側機槍`, tag: 'L' },
+    { x: -4.6, y: 2.3, z: w / 2, center: -90 * DEG, arc: 75 * DEG, label: `${name} 右側機槍`, tag: 'R' },
   ]);
   car.hatches = [-1.6];
   car.obstacles = [{ x: tx, z: 0, r: 1.85 }];
@@ -372,14 +372,29 @@ function buildGunCar(mats, high) {
   return car;
 }
 
-// 以 Blender 模型建立火砲車（節點命名見 tools/blender/gun_car.py）
-function buildGunCarFromModel(model, high) {
-  const len = 16;
-  const w = 3.1;
-  const name = high ? '火砲車乙' : '火砲車甲';
-  const car = baseCar(name, high ? 'gunB' : 'gunA', len);
+// 以 Blender 模型取代程式模型的外觀。尺寸、崗位、艙口等資料沿用程式建模的設定，
+// 只把砲塔、機槍、測距儀等可動節點換成模型中同名的節點（命名見 tools/blender/parts.py）。
+function swapToModel(car, model) {
   const g = model.clone(true);
+  const need = [];
+  if (car.gun) need.push('Turret', 'Elev', 'Recoil', 'Muzzle', 'Sight');
+  for (const mg of car.mgs) need.push(...['Base', 'Yaw', 'Pitch', 'Muzzle', 'Sight'].map((p) => `MG_${mg.tag}_${p}`));
+  if (car.rangefinder) need.push('RF_Yaw', 'RF_Anchor');
+  if (car.console) need.push('ConsoleAnchor');
+  if (car.chimney) need.push('Chimney');
+  const nodes = {};
+  const missing = [];
+  for (const n of need) {
+    nodes[n] = g.getObjectByName(n);
+    if (!nodes[n]) missing.push(n);
+  }
+  if (missing.length) {
+    console.warn(`${car.name} 模型缺少節點 ${missing.join(', ')}，改用程式模型`);
+    return;
+  }
+  car.group.clear();
   car.group.add(g);
+  car.wheels = [];
   g.traverse((o) => {
     if (o.isMesh) {
       o.castShadow = true;
@@ -387,41 +402,16 @@ function buildGunCarFromModel(model, high) {
     }
     if (o.name.startsWith('Wheelset')) car.wheels.push({ mesh: o, r: o.userData.radius ?? 0.43 });
   });
-  const get = (n) => {
-    const o = g.getObjectByName(n);
-    if (!o) throw new Error(`模型缺少節點 ${n}`);
-    return o;
-  };
-  car.innerHalf = w / 2 - WALL;
-  car.roofY = HULL_Y0 + 2.3;
-  car.roofHalf = w / 2 - 0.55;
-
-  const gun = { turret: get('Turret'), elev: get('Elev'), recoil: get('Recoil'), muzzle: get('Muzzle'), sight: get('Sight') };
-  car.gun = gun;
-  const tx = gun.turret.position.x;
-  car.stations.push({ type: 'gun', x: tx, lat: 0, label: `${name} 十四年式十糎高射砲`, ref: gun });
-  for (const [tag, side, center] of [
-    ['L', -1, 90 * DEG],
-    ['R', 1, -90 * DEG],
-  ]) {
-    const label = `${name} ${side < 0 ? '左' : '右'}側機槍`;
-    const mg = {
-      base: get(`MG_${tag}_Base`),
-      yawG: get(`MG_${tag}_Yaw`),
-      pitchG: get(`MG_${tag}_Pitch`),
-      muzzle: get(`MG_${tag}_Muzzle`),
-      sight: get(`MG_${tag}_Sight`),
-      center,
-      arc: 75 * DEG,
-      label,
-    };
-    car.mgs.push(mg);
-    car.stations.push({ type: 'mg', x: mg.base.position.x, lat: side * Math.min(1.0, car.innerHalf - 0.35), label, ref: mg });
+  if (car.gun) {
+    Object.assign(car.gun, { turret: nodes.Turret, elev: nodes.Elev, recoil: nodes.Recoil, muzzle: nodes.Muzzle, sight: nodes.Sight });
   }
-  car.hatches = [-1.6];
-  car.obstacles = [{ x: tx, z: 0, r: 1.85 }];
-  car.topY = gun.turret.position.y + 1.5;
-  return car;
+  for (const mg of car.mgs) {
+    const p = (n) => nodes[`MG_${mg.tag}_${n}`];
+    Object.assign(mg, { base: p('Base'), yawG: p('Yaw'), pitchG: p('Pitch'), muzzle: p('Muzzle'), sight: p('Sight') });
+  }
+  if (car.rangefinder) Object.assign(car.rangefinder, { yawG: nodes.RF_Yaw, anchor: nodes.RF_Anchor });
+  if (car.console) car.console.anchor = nodes.ConsoleAnchor;
+  if (car.chimney) car.chimney = nodes.Chimney;
 }
 
 function buildGunCarC(mats) {
@@ -514,7 +504,7 @@ function buildCommand(mats) {
   );
   car.group.add(wire);
 
-  addMgs(car, mats, [{ x: -4, y: 2.3, z: -w / 2, center: 90 * DEG, arc: 75 * DEG, label: '指揮車 左側機槍' }]);
+  addMgs(car, mats, [{ x: -4, y: 2.3, z: -w / 2, center: 90 * DEG, arc: 75 * DEG, label: '指揮車 左側機槍', tag: 'L' }]);
   car.hatches = [-1.0];
   car.obstacles = [
     { x: cx, z: 0, r: 0.9 },
@@ -610,8 +600,8 @@ function buildTender(mats) {
   applyHull(car, makeHull(mats, { len, w, h: 2.3, c: 0.55 }));
   addRunningGear(car.group, mats, len, car.wheels);
   addMgs(car, mats, [
-    { x: 0.8, y: 2.3, z: -w / 2, center: 90 * DEG, arc: 75 * DEG, label: '炭水車 左側機槍' },
-    { x: 0.8, y: 2.3, z: w / 2, center: -90 * DEG, arc: 75 * DEG, label: '炭水車 右側機槍' },
+    { x: 0.8, y: 2.3, z: -w / 2, center: 90 * DEG, arc: 75 * DEG, label: '炭水車 左側機槍', tag: 'L' },
+    { x: 0.8, y: 2.3, z: w / 2, center: -90 * DEG, arc: 75 * DEG, label: '炭水車 右側機槍', tag: 'R' },
   ]);
   car.hatches = [-2.6];
   car.topY = car.roofY + 0.3;
@@ -663,13 +653,14 @@ function buildPower(mats) {
   }
 
   addMgs(car, mats, [
-    { x: -len / 2 + 0.75, y: 2.25, z: -w / 2, center: 135 * DEG, arc: 70 * DEG, label: '電源車 左後機槍' },
-    { x: -len / 2 + 0.75, y: 2.25, z: w / 2, center: -135 * DEG, arc: 70 * DEG, label: '電源車 右後機槍' },
+    { x: -len / 2 + 0.75, y: 2.25, z: -w / 2, center: 135 * DEG, arc: 70 * DEG, label: '電源車 左後機槍', tag: 'RL' },
+    { x: -len / 2 + 0.75, y: 2.25, z: w / 2, center: -135 * DEG, arc: 70 * DEG, label: '電源車 右後機槍', tag: 'RR' },
   ]);
   car.hatches = [len / 2 - 4.2];
   car.obstacles = [
     { x: x0 - 2.5, z: 0, r: 0.15 },
     { x: x0 + 2.5, z: 0, r: 0.15 },
+    { x: 6.3, z: 0.75, r: 0.2 }, // 發電機排氣管（Blender 模型）
   ];
   car.topY = car.roofY + 0.3;
   return car;
@@ -677,14 +668,18 @@ function buildPower(mats) {
 
 // 九四式編成，由前到後
 export function buildConsist(mats, models = {}) {
-  return [
+  const cars = [
     buildGuard(mats),
-    models.gunA ? buildGunCarFromModel(models.gunA, false) : buildGunCar(mats, false),
-    models.gunB ? buildGunCarFromModel(models.gunB, true) : buildGunCar(mats, true),
+    buildGunCar(mats, false),
+    buildGunCar(mats, true),
     buildGunCarC(mats),
     buildCommand(mats),
     buildLocomotive(mats),
     buildTender(mats),
     buildPower(mats),
   ];
+  for (const car of cars) {
+    if (models[car.kind]) swapToModel(car, models[car.kind]);
+  }
+  return cars;
 }

@@ -1,22 +1,38 @@
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 
-// Blender 輸出的車廂模型（由 tools/blender/*.py 產生）；載入失敗時改用程式建模
+// Blender 輸出的車廂模型（由 tools/blender/*.py 產生），鍵為車廂 kind；
+// 缺檔或載入失敗時該節改用程式建模
 const MODELS = {
+  guard: 'models/guard_car.glb',
   gunA: 'models/gun_car_a.glb',
+  gunB: 'models/gun_car_b.glb',
+  gunC: 'models/gun_car_c.glb',
+  command: 'models/command_car.glb',
+  loco: 'models/locomotive.glb',
+  tender: 'models/tender_car.glb',
+  power: 'models/power_car.glb',
 };
 
 export async function loadModels(onProgress) {
+  const draco = new DRACOLoader();
+  draco.setDecoderPath('draco/');
   const loader = new GLTFLoader();
+  loader.setDRACOLoader(draco);
   const out = {};
+  let done = 0;
+  const total = Object.keys(MODELS).length;
   await Promise.all(
-    Object.entries(MODELS).map(async ([key, url]) => {
+    Object.entries(MODELS).map(async ([kind, url]) => {
       try {
-        const gltf = await loader.loadAsync(url, onProgress);
-        out[key] = gltf.scene;
+        const gltf = await loader.loadAsync(url);
+        out[kind] = gltf.scene;
       } catch (err) {
         console.warn(`模型載入失敗，改用程式模型：${url}`, err);
       }
+      onProgress?.(++done, total);
     }),
   );
+  draco.dispose();
   return out;
 }

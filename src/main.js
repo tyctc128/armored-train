@@ -67,7 +67,7 @@ async function init() {
   WEAPONS.type14.tables = Object.fromEntries(WEAPONS.type14.shells.map((s) => [s.id, buildFiringTable(WEAPONS.type14, s)]));
 
   ui.setLoading('載入車廂模型…');
-  const models = await loadModels();
+  const models = await loadModels((done, total) => ui.setLoading(`載入車廂模型… ${done}/${total}`));
   ui.setLoading('組裝九四式裝甲列車…');
   await tick();
   const input = new Input(canvas);
