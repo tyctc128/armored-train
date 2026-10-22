@@ -50,8 +50,9 @@ export class Enemies {
     return s;
   }
 
-  spawnInfantry({ x, side, dist, count = 8, lmg = 1, name = '敵步兵班', approach = 150 }) {
-    const unit = { type: 'infantry', name, side, dist, members: [], state: 'advance', t: 0, initial: count };
+  // fixed：固守生成處的陣地，不隨列車移動
+  spawnInfantry({ x, side, dist, count = 8, lmg = 1, name = '敵步兵班', approach = 150, fixed = false }) {
+    const unit = { type: 'infantry', name, side, dist, members: [], state: 'advance', t: 0, initial: count, fixed };
     const anchor = this.trackPoint(x, side, dist);
     for (let i = 0; i < count; i++) {
       const along = (i - (count - 1) / 2) * 7 + gaussian() * 1.5;
@@ -150,7 +151,7 @@ export class Enemies {
     } else if (m.state === 'move') {
       // 射擊位置跟著列車目前的位置移動；距離 600 m 內就地展開
       m.reslot = (m.reslot ?? 0) - dt;
-      if (m.reslot <= 0) {
+      if (m.reslot <= 0 && !u.fixed) {
         m.reslot = 3;
         m.slot = this.findSlot(trainC, m.along, u.side, u.dist);
       }
@@ -361,11 +362,13 @@ export class Enemies {
     if (m.horse) m.horse.saddle.getWorldPosition(muzzle).add(new THREE.Vector3(0, 0.9, 0));
     else muzzle.set(m.x, s.baseY + (s.pose === 'prone' ? 0.55 : s.pose === 'crouchAim' ? 1.05 : 1.45), m.z);
     let aim;
+    let aimPlayer = false;
     const p = g.player;
     const r = Math.random();
     const exposedCrew = g.crew.members.filter((c) => c.alive && c.exposed);
     if (p.exposed && g.mode === 'walk' && r < 0.55) {
       aim = g.camera.position.clone().add(new THREE.Vector3(0, -0.4, 0));
+      aimPlayer = true;
     } else if (r < (burst ? 0.6 : 0.35) && car.mgs.length) {
       // 瞄準槍眼（機槍球形槍架）
       const mg = car.mgs[Math.floor(Math.random() * car.mgs.length)];
@@ -383,7 +386,8 @@ export class Enemies {
     // 地形遮蔽
     if (!this.hasLos(muzzle, dir, dist)) return false;
     const shots = burst ? 8 : 1;
-    const spread = (m.horse ? 7 : burst ? 4.5 : 2.5) + dist / 300;
+    // 瞄準車外的人時較專注（散布較小）
+    const spread = ((m.horse ? 7 : burst ? 4.5 : 2.5) + dist / 300) * (aimPlayer && p.level === 'ground' ? 0.6 : 1);
     const side = new THREE.Vector3().crossVectors(dir, UP).normalize();
     // 彈道下墜補償：依步槍彈的彈道解（每 50 m 一格的表）
     const lift = this.elevation(dist);

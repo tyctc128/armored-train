@@ -125,6 +125,13 @@ export class Train {
       this.speed = 0;
     }
     this.distance += this.speed * dt;
+    // 因斷軌停車後，司機把傳令鐘回到「停止」等候命令（修好後不會自己開走）
+    if (this.blockWarned && !this.blockHeld && Math.abs(this.speed) < 0.05) {
+      this.blockHeld = true;
+      this.ordered = this.acknowledged = 1;
+      this.pending = null;
+      this.hooks.message('司機：「已在斷口前停車，等候命令。」', 'radio');
+    }
     if (this.blockS != null && this.sFront > this.blockS) {
       this.derailed = true;
       this.speed = 0;
@@ -136,6 +143,7 @@ export class Train {
   setBlock(s) {
     this.blockS = s;
     this.blockWarned = false;
+    this.blockHeld = false;
   }
 
   updateTransforms(time) {

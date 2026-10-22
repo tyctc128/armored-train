@@ -504,7 +504,6 @@ async function init() {
     if (game.mode === 'station') where = game.station.label;
     else if (player.level === 'ground') where = '車外地面';
     else where = `${w.inGap ? '車廂連接處' : w.car.name}・${player.level === 'in' ? '車內' : '車頂'}`;
-    const rail = railBreak.broken ? `<div><span class="k">斷軌處</span> <span class="warn">距車頭 ${Math.max(0, Math.round(railBreak.s - train.sFront))} m</span>・修復 ${Math.round(railBreak.progress * 100)}%</div>` : '';
     const exposed = game.mode === 'walk' && player.exposed;
     ui.set(
       ui.status,
@@ -513,7 +512,6 @@ async function init() {
        <div><span class="k">位置</span> ${where}${exposed ? '　<span class="warn">⚠ 暴露位置</span>' : ''}</div>
        <div><span class="k">氣象</span> 15°C・無風　<span class="k">輔助</span> ${game.settings.assist ? '<span class="ok">開</span>' : '關'}</div>
        <div>${damage.statusHtml()}</div>
-       ${rail}
        ${game.mode === 'third' ? '<div class="acc">第三人稱鏡頭（V 返回）</div>' : ''}`,
     );
     ui.set(

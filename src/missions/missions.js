@@ -150,7 +150,16 @@ export const LEVEL3 = {
       },
       text: (c) => `下車修復斷軌（進度 ${Math.round(c.railBreak.progress * 100)}%）`,
       hint: '先按 C 讓機槍、十糎砲壓制伏兵（也可以在指揮台標記目標）。再走到車廂連接處（車廂之間）按 E 下車，到斷口按住 E 修理。受傷時修理變慢。',
-      done: (c) => !c.railBreak.broken,
+      done: (c, st) => {
+        // 修到三成時敵軍反撲：步兵在鐵道正前方占領陣地，只有車頭的機槍射得到
+        if (!st.c && c.railBreak.progress >= 0.35) {
+          const p = c.railBreak.pos;
+          c.radio('觀測哨', '鐵道正前方約 400 m 又有敵步兵占領陣地，目標是修軌的人！');
+          setTimeout(() => c.radio('副官', '指揮官，先放開工具躲到車廂後面！等警戒車的機槍壓制他們再修！'), 3000);
+          st.c = c.enemies.spawnInfantry({ x: p.x + 370, side: -1, dist: 35, count: 12, lmg: 3, name: '前方反撲敵兵', approach: 30, fixed: true });
+        }
+        return !c.railBreak.broken;
+      },
     },
     {
       enter: (c) => {

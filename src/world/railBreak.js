@@ -72,10 +72,10 @@ export class RailBreak {
       group.add(tie);
     }
     // 標示竿（紅旗）：方便從遠處找到斷軌處
-    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 2.2, 6), wood);
-    pole.position.copy(at(-3.2, 2.2, 0.8));
-    const flag = new THREE.Mesh(new THREE.PlaneGeometry(0.6, 0.4), new THREE.MeshStandardMaterial({ color: 0xc8301e, side: THREE.DoubleSide }));
-    flag.position.copy(at(-3.2, 2.2, 1.7)).addScaledVector(t, 0.3);
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 2.8, 6), wood);
+    pole.position.copy(at(-3.2, 2.4, 1.1));
+    const flag = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 0.7), new THREE.MeshStandardMaterial({ color: 0xd8301e, emissive: 0x401008, side: THREE.DoubleSide }));
+    flag.position.copy(at(-3.2, 2.4, 2.1)).addScaledVector(t, 0.55);
     flag.rotation.y = yaw;
     group.add(pole, flag);
     this.scene.add(group);
