@@ -9,6 +9,7 @@ import { setupEnvironment } from './world/environment.js';
 import { createMaterials } from './train/carModels.js';
 import { Train, NOTCHES } from './train/train.js';
 import { loadModels } from './train/models.js';
+import { TrainMap } from './trainMap.js';
 import { Player } from './player/player.js';
 import { Effects } from './weapons/effects.js';
 import { Projectiles } from './weapons/projectiles.js';
@@ -147,6 +148,7 @@ async function init() {
 
   const player = new Player(train);
   game.player = player;
+  const trainMap = new TrainMap(document.getElementById('trainmap'), train);
 
   // ── 彈出視窗與暫停 ──
   const pause = ui.pause;
@@ -252,8 +254,12 @@ async function init() {
       }
       return;
     }
+    for (let i = 0; i < train.cars.length; i++) {
+      if (input.hit(`Digit${i + 1}`)) player.startAuto(i, game.message);
+    }
     player.update(dt, input);
     if (input.hit('KeyE')) {
+      player.cancelAuto();
       const it = nearestInteractable();
       if (!it) return;
       if (it.kind === 'hatch') {
@@ -327,7 +333,9 @@ async function init() {
       else if (it?.s.obj) prompt = `按 E：${it.s.label}`;
       else if (it) prompt = it.s.label;
     }
+    if (game.mode === 'walk' && player.auto) prompt = `自動前往 ${player.auto.index + 1}・${player.auto.name}（WASD 取消）`;
     ui.set(ui.prompt, prompt);
+    trainMap.draw({ player, station: game.mode === 'station' ? game.station : null, autoTarget: player.auto, mode: game.mode });
     ui.dot.style.display = game.mode === 'walk' ? 'block' : 'none';
   }
 
