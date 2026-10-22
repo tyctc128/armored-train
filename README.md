@@ -25,6 +25,21 @@ npm run dev
 - 試驗靶場：靶板、土嚢陣地、移動靶車
 - 第三人稱列車鏡頭；3D 定位合成音效（依音速延遲）
 
+## Blender 模型
+
+車廂模型由 `tools/blender/` 的 Python 腳本驅動 Blender 產生（目前完成火砲車甲；其餘車廂仍用程式建模）。
+
+```bash
+"C:\Program Files\Blender Foundation\Blender 5.2\blender.exe" -b --factory-startup -P tools/blender/gun_car.py -- A
+```
+
+會產生：
+- `public/models/gun_car_a.glb`：遊戲載入
+- `assets/blender/gun_car_a.blend`：可用 Blender 開啟檢視、修改
+- `docs/preview/gun_car_a.png`：預覽圖
+
+手動修改 .blend 後，請自行匯出成同名 .glb；重新執行腳本會覆蓋手動修改。節點名稱（Turret、Elev、Muzzle、Sight、MG_L_*、Wheelset_* 等）遊戲會用到，請勿更名。
+
 ## 目錄
 
 | 路徑 | 內容 |

@@ -8,6 +8,7 @@ import { buildScenery } from './world/scenery.js';
 import { setupEnvironment } from './world/environment.js';
 import { createMaterials } from './train/carModels.js';
 import { Train, NOTCHES } from './train/train.js';
+import { loadModels } from './train/models.js';
 import { Player } from './player/player.js';
 import { Effects } from './weapons/effects.js';
 import { Projectiles } from './weapons/projectiles.js';
@@ -65,6 +66,8 @@ async function init() {
   }
   WEAPONS.type14.tables = Object.fromEntries(WEAPONS.type14.shells.map((s) => [s.id, buildFiringTable(WEAPONS.type14, s)]));
 
+  ui.setLoading('載入車廂模型…');
+  const models = await loadModels();
   ui.setLoading('組裝九四式裝甲列車…');
   await tick();
   const input = new Input(canvas);
@@ -79,7 +82,7 @@ async function init() {
     station: null,
     settings: { assist: false },
     stats: { shots: 0, hits: 0 },
-    orbit: { yaw: -2.4, pitch: 0.25, dist: 75 },
+    orbit: { yaw: -2.4, pitch: 0.25, dist: 75, car: 4 },
     tableShell: 'HE',
     input,
     audio,
@@ -90,7 +93,7 @@ async function init() {
   const train = new Train(scene, track, mats, {
     message: game.message,
     bell: (ack) => audio.play('bell', train.cars[4].console.anchor.getWorldPosition(new THREE.Vector3()), ack ? 0.6 : 1),
-  });
+  }, models);
   game.train = train;
   train.updateTransforms(0);
 
@@ -237,6 +240,8 @@ async function init() {
       o.yaw -= input.mouseDX * 0.004;
       o.pitch = clamp(o.pitch + input.mouseDY * 0.003, -0.1, 1.4);
       o.dist = clamp(o.dist * (1 + input.wheel * 0.12), 12, 600);
+      if (input.hit('BracketLeft')) o.car = Math.max(0, o.car - 1);
+      if (input.hit('BracketRight')) o.car = Math.min(train.cars.length - 1, o.car + 1);
       return;
     }
     if (game.mode === 'station') {
@@ -268,7 +273,7 @@ async function init() {
   const orbitCenter = new THREE.Vector3();
   function applyCamera() {
     if (game.mode === 'third') {
-      const c = train.cars[4].group.position;
+      const c = train.cars[game.orbit.car].group.position;
       orbitCenter.lerp(c, orbitCenter.lengthSq() ? 0.2 : 1);
       const o = game.orbit;
       camera.position.set(

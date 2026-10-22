@@ -20,10 +20,10 @@ export const SHELTERED = 1;
 export const EXPOSED = 2;
 
 export class Train {
-  constructor(scene, track, mats, hooks) {
+  constructor(scene, track, mats, hooks, models) {
     this.track = track;
     this.hooks = hooks;
-    this.cars = buildConsist(mats);
+    this.cars = buildConsist(mats, models);
     let o = 0;
     for (const car of this.cars) {
       car.offset = o;

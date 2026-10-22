@@ -372,6 +372,58 @@ function buildGunCar(mats, high) {
   return car;
 }
 
+// 以 Blender 模型建立火砲車（節點命名見 tools/blender/gun_car.py）
+function buildGunCarFromModel(model, high) {
+  const len = 16;
+  const w = 3.1;
+  const name = high ? '火砲車乙' : '火砲車甲';
+  const car = baseCar(name, high ? 'gunB' : 'gunA', len);
+  const g = model.clone(true);
+  car.group.add(g);
+  g.traverse((o) => {
+    if (o.isMesh) {
+      o.castShadow = true;
+      o.receiveShadow = true;
+    }
+    if (o.name.startsWith('Wheelset')) car.wheels.push({ mesh: o, r: o.userData.radius ?? 0.43 });
+  });
+  const get = (n) => {
+    const o = g.getObjectByName(n);
+    if (!o) throw new Error(`模型缺少節點 ${n}`);
+    return o;
+  };
+  car.innerHalf = w / 2 - WALL;
+  car.roofY = HULL_Y0 + 2.3;
+  car.roofHalf = w / 2 - 0.55;
+
+  const gun = { turret: get('Turret'), elev: get('Elev'), recoil: get('Recoil'), muzzle: get('Muzzle'), sight: get('Sight') };
+  car.gun = gun;
+  const tx = gun.turret.position.x;
+  car.stations.push({ type: 'gun', x: tx, lat: 0, label: `${name} 十四年式十糎高射砲`, ref: gun });
+  for (const [tag, side, center] of [
+    ['L', -1, 90 * DEG],
+    ['R', 1, -90 * DEG],
+  ]) {
+    const label = `${name} ${side < 0 ? '左' : '右'}側機槍`;
+    const mg = {
+      base: get(`MG_${tag}_Base`),
+      yawG: get(`MG_${tag}_Yaw`),
+      pitchG: get(`MG_${tag}_Pitch`),
+      muzzle: get(`MG_${tag}_Muzzle`),
+      sight: get(`MG_${tag}_Sight`),
+      center,
+      arc: 75 * DEG,
+      label,
+    };
+    car.mgs.push(mg);
+    car.stations.push({ type: 'mg', x: mg.base.position.x, lat: side * Math.min(1.0, car.innerHalf - 0.35), label, ref: mg });
+  }
+  car.hatches = [-1.6];
+  car.obstacles = [{ x: tx, z: 0, r: 1.85 }];
+  car.topY = gun.turret.position.y + 1.5;
+  return car;
+}
+
 function buildGunCarC(mats) {
   const len = 15.9;
   const car = baseCar('火砲車丙', 'gunC', len);
@@ -624,11 +676,11 @@ function buildPower(mats) {
 }
 
 // 九四式編成，由前到後
-export function buildConsist(mats) {
+export function buildConsist(mats, models = {}) {
   return [
     buildGuard(mats),
-    buildGunCar(mats, false),
-    buildGunCar(mats, true),
+    models.gunA ? buildGunCarFromModel(models.gunA, false) : buildGunCar(mats, false),
+    models.gunB ? buildGunCarFromModel(models.gunB, true) : buildGunCar(mats, true),
     buildGunCarC(mats),
     buildCommand(mats),
     buildLocomotive(mats),
