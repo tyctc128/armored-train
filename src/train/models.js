@@ -12,6 +12,10 @@ const MODELS = {
   loco: 'models/locomotive.glb',
   tender: 'models/tender_car.glb',
   power: 'models/power_car.glb',
+  // 軍士（tools/blender/soldier.py）
+  npc_soldier: 'models/crew_soldier.glb',
+  npc_crew: 'models/crew_crew.glb',
+  npc_officer: 'models/crew_officer.glb',
 };
 
 export async function loadModels(onProgress) {

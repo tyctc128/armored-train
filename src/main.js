@@ -13,6 +13,7 @@ import { TrainMap } from './trainMap.js';
 import { CarGuide } from './guide/carGuide.js';
 import './guide/guide.css';
 import { Tutorial } from './tutorial/tutorial.js';
+import { Crew } from './crew/crew.js';
 import './tutorial/tutorial.css';
 import { Player } from './player/player.js';
 import { Effects } from './weapons/effects.js';
@@ -161,6 +162,9 @@ async function init() {
   game.player = player;
   const trainMap = new TrainMap(document.getElementById('trainmap'), train);
   const guide = new CarGuide(document.getElementById('guide'), train, () => player.where()?.car);
+
+  game.camera = camera;
+  const crew = new Crew(train, models, game);
 
   // 第一關教學
   tutorial = new Tutorial(
@@ -447,6 +451,7 @@ async function init() {
       projectiles.update(dt);
       targets.update(dt);
       effects.update(dt);
+      crew.update(dt);
       tutorial.update(dt);
       audio.updateEngine(dt, train.speed, loco.chimney.getWorldPosition(locoPos));
     }
