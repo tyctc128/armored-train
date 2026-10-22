@@ -2,6 +2,8 @@
 
 九四式裝甲列車模擬遊戲（網頁 3D，Three.js）。玩家獨自一人操作整列裝甲列車，在車廂間奔走，輪流擔任指揮官、主砲手、機槍手。
 
+線上試玩：https://tyctc128.github.io/armored-train/
+
 設計文件：[docs/GDD.md](docs/GDD.md)
 
 ## 執行
