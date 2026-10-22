@@ -112,6 +112,39 @@ export function helpHtml() {
   <div class="note">射表以 15°C、無風、砲目同高為準。行進間射擊時，列車速度會加到彈丸上，側向射擊需自行修正。</div>`;
 }
 
+export function menuHtml(levels, progress) {
+  const cards = levels
+    .map((l) => {
+      const rank = progress.cleared[l.id];
+      return `<button class="lv${l.ready ? '' : ' locked'}" ${l.ready ? `data-goto="brief:${l.id}"` : 'disabled'}>
+        <b>第 ${l.id} 關</b><strong>${l.name}</strong><span>${l.sub}</span>
+        <em>${l.ready ? (rank ? `已完成・評等 ${rank}` : '可遊玩') : '製作中'}</em></button>`;
+    })
+    .join('');
+  return `
+  <h2>鋼軌堡壘　九四式裝甲列車</h2>
+  <div class="note">選擇關卡。全車軍士由你指揮，你也可以隨時親自接手任何崗位。</div>
+  <div class="lv-grid">${cards}</div>`;
+}
+
+export function level2BriefHtml() {
+  return `
+  <h2>電報：第二關　沿線巡邏</h2>
+  <div>第一裝甲列車隊 指揮官 收</div>
+  <div>試驗線沿線出現敵軍騎兵與步兵襲擾。命你部自起點站出發，巡邏至終點站，沿途擊退敵軍。</div>
+  <h3>情報</h3>
+  <div>敵騎兵約 8 騎一隊，會衝到鐵道旁 200 m 左右奔馳射擊；敵步兵班 8–10 名，配輕機槍，會在 400–500 m 外趴下射擊。</div>
+  <div>敵步槍打不穿車廂側面裝甲，但在<b>車頂、機關車腳踏板、敞頂砲座</b>等暴露位置會中彈；槍眼附近的機槍手也可能受傷。</div>
+  <h3>指揮要領</h3>
+  <div>機槍手會自動對射界內的敵人射擊。按 <kbd>C</kbd> 開乘員命令：切換機槍射擊、十糎砲「自由射擊」或「砲擊選定目標」（目標簿選定的目標）。</div>
+  <div>在指揮台用觀測鏡標記目標後，測距手約 4 秒會補上精確測距。你也可以隨時走到任何崗位親自接手。</div>
+  <div class="note">指揮官陣亡時由預備士兵接替（3 名）；用完即任務失敗。</div>
+  <div class="brief-btns">
+    <button class="start-btn" data-goto="start:2">出發</button>
+    <button class="start-btn secondary" data-goto="menu">返回</button>
+  </div>`;
+}
+
 export function briefingHtml() {
   return `
   <h2>電報：第一關　試驗運行</h2>
@@ -126,6 +159,7 @@ export function briefingHtml() {
   <div class="brief-btns">
     <button class="start-btn" id="start-btn">開始教學</button>
     <button class="start-btn secondary" id="free-btn">略過教學，自由練習</button>
+    <button class="start-btn secondary" data-goto="menu">返回</button>
   </div>`;
 }
 

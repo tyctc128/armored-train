@@ -1,0 +1,66 @@
+/* 乘員狀態與命令選單 */
+#crewpanel { top: 150px; right: 12px; min-width: 260px; font-size: 13px; }
+#crewpanel kbd, #cmdmenu kbd {
+  display: inline-block;
+  min-width: 1.4em;
+  padding: 0 4px;
+  border: 1px solid var(--line);
+  border-bottom-width: 2px;
+  border-radius: 3px;
+  background: #2a2c22;
+  color: var(--accent);
+  font-family: inherit;
+  font-size: 11px;
+  text-align: center;
+}
+#cmdmenu {
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  min-width: 380px;
+  border-color: rgba(224, 178, 90, 0.55);
+  border-left: 3px solid var(--accent);
+  font-size: 14px;
+}
+#cmdmenu .cmd-title { color: var(--accent); font-weight: 700; margin-bottom: 6px; }
+#cmdmenu .cmd-title small { color: var(--ink-dim); font-weight: 400; margin-left: 8px; }
+#cmdmenu table { width: 100%; border-collapse: collapse; }
+#cmdmenu td { padding: 4px 6px; border-bottom: 1px solid var(--line); }
+#cmdmenu td.v { color: var(--ok); text-align: right; }
+#cmdmenu .cmd-note { margin-top: 8px; font-size: 12px; color: var(--ink-dim); max-width: 380px; }
+
+/* 中彈紅框 */
+#hurt {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  background: radial-gradient(ellipse at center, rgba(160, 0, 0, 0) 55%, rgba(160, 0, 0, 0.75) 100%);
+}
+
+.t-badge.mission { background: var(--accent); }
+.t-rank.fail { border-color: var(--danger); color: var(--danger); }
+
+/* 關卡選單 */
+.lv-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; margin-top: 12px; }
+.lv {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  text-align: left;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--line);
+  border-top: 3px solid var(--accent);
+  border-radius: 4px;
+  color: var(--ink);
+  font: inherit;
+  cursor: pointer;
+}
+.lv:hover { background: rgba(224, 178, 90, 0.1); }
+.lv b { font-size: 12px; color: var(--accent); }
+.lv strong { font-size: 18px; }
+.lv span { font-size: 12px; color: var(--ink-dim); line-height: 1.5; }
+.lv em { margin-top: auto; font-style: normal; font-size: 12px; color: var(--ok); }
+.lv.locked { opacity: 0.45; cursor: default; border-top-color: var(--line); }
+.lv.locked em { color: var(--ink-dim); }

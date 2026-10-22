@@ -25,18 +25,19 @@ from common import (  # noqa: E402
 )
 
 VARIANT = (script_args() or ['soldier'])[0]
-assert VARIANT in ('soldier', 'crew', 'officer')
+assert VARIANT in ('soldier', 'crew', 'officer', 'enemy')
+ENEMY = VARIANT == 'enemy'  # 架空敵軍：灰綠制服、藍領章、平頂軍帽
 
 reset_scene()
 TEX = os.path.join(PROJECT, 'assets', 'textures')
-M_WOOL = material('Wool', image=paint_texture(TEX, '#857650', 'uniform_wool', seed=21), rough=0.95)
-M_WOOL_D = material('WoolDark', '#6f6243', rough=0.95)
+M_WOOL = material('Wool', image=paint_texture(TEX, '#5d6a63' if ENEMY else '#857650', 'uniform_wool_enemy' if ENEMY else 'uniform_wool', seed=21), rough=0.95)
+M_WOOL_D = material('WoolDark', '#46504a' if ENEMY else '#6f6243', rough=0.95)
 M_SKIN = material('Skin', '#c99a72', rough=0.7)
 M_LEATHER = material('Leather', '#5a3b22', rough=0.55)
 M_BOOT = material('Boot', '#3a2a1c', rough=0.5)
 M_HELM = material('Helmet', '#5d5e3e', rough=0.6, metal=0.25)
 M_BRASS = material('Brass', '#c49a45', rough=0.35, metal=0.9)
-M_RED = material('Collar', '#9c2a22', rough=0.8)
+M_RED = material('Collar', '#2f4f86' if ENEMY else '#9c2a22', rough=0.8)
 M_STOCK = material('RifleWood', '#6b4426', rough=0.6)
 M_STEEL = material('Steel', '#2c2c29', rough=0.4, metal=0.8)
 M_DARK = material('Eye', '#151210', rough=0.6)
@@ -74,7 +75,7 @@ for s in (-1, 1):
     m.box((0.117, 0.37, s * 0.085), (0.012, 0.03, 0.095), WOOLD)                          # 袋蓋
 m.box((0, 0.03, 0), (0.235, 0.06, 0.36), LEA)                                              # 皮帶
 m.box((0.12, 0.03, 0), (0.012, 0.055, 0.06), BRS)                                          # 帶扣
-if VARIANT == 'soldier':
+if VARIANT in ('soldier', 'enemy'):
     for z in (-0.12, 0.12):
         m.box((0.13, 0.04, z), (0.06, 0.08, 0.1), LEA)                                     # 彈盒
     m.box((-0.13, 0.04, 0), (0.06, 0.08, 0.12), LEA)                                       # 後彈盒
@@ -104,7 +105,12 @@ for s in (-1, 1):
     m.box((0.092, 0.205, s * 0.04), (0.008, 0.008, 0.035), EYE)                           # 眉
     m.box((0.0, 0.17, s * 0.1), (0.035, 0.05, 0.015), SKIN)                                # 耳
 m.box((0.088, 0.105, 0), (0.008, 0.008, 0.04), EYE)                                        # 嘴
-if VARIANT == 'soldier':
+if ENEMY:
+    # 平頂軍帽（帽頂較寬、黑色帽簷）
+    m.lathe((0, 0.18, 0), (0, 1, 0), [(0, 0.113), (0.05, 0.116), (0.075, 0.135), (0.095, 0.14), (0.1, 0)], 20, WOOLD)
+    m.box((0.1, 0.185, 0), (0.08, 0.012, 0.15), BOOT)
+    m.lathe((0.112, 0.225, 0), (1, 0, 0), [(0, 0.016), (0.006, 0)], 6, RED)
+elif VARIANT == 'soldier':
     m.lathe((0, 0.16, 0), (0, 1, 0), [(0, 0.16), (0.012, 0.15), (0.03, 0.135), (0.08, 0.125), (0.12, 0.1), (0.145, 0.06), (0.155, 0)], 20, HELM)
     m.lathe((0.13, 0.25, 0), (1, 0.6, 0), [(0, 0.02), (0.006, 0)], 5, BRS)                 # 星章
     for s in (-1, 1):
@@ -156,7 +162,7 @@ for tag, s in (('L', -1), ('R', 1)):
     part(f'Foot{tag}', an, m)
 
 # ── 三八式歩兵銃（步兵：斜背在背上；遊戲可改掛到手上） ──
-if VARIANT == 'soldier':
+if VARIANT in ('soldier', 'enemy'):
     rifle = empty('Rifle', spine, (-0.16, 0.22, 0))
     rifle.rotation_euler = (math.radians(28), 0, 0)  # 斜背
     m = MeshBuilder()

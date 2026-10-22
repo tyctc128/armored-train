@@ -33,6 +33,39 @@ export const POSES = {
   carry: { ShoulderL: [0.1, 0, 60 * D], ElbowL: [0, 0, 55 * D], ShoulderR: [-0.1, 0, 60 * D], ElbowR: [0, 0, 55 * D] },
   salute: { ShoulderR: [-1.25, 0, 25 * D], ElbowR: [0, 0, 125 * D], HandR: [0, 0, -0.3], ShoulderL: [0.04, 0, 0] },
   lookUp: { Head: [0, 0, 28 * D], Spine: [0, 0, -6 * D], ShoulderL: [0, 0, 20 * D], ElbowL: [0, 0, 30 * D] },
+  // 持槍瞄準（步槍改架在肩上，見 rifleAim）
+  aim: {
+    rifle: 'aim', Spine: [0, -0.25, 4 * D], Head: [0, 0.2, -4 * D],
+    ShoulderR: [-0.25, 0, 70 * D], ElbowR: [0, 0, 70 * D], ShoulderL: [0.35, 0, 80 * D], ElbowL: [0, 0, 15 * D],
+  },
+  crouchAim: {
+    rifle: 'aim', hipsY: -0.38, Spine: [0, -0.25, 12 * D], Head: [0, 0.2, -8 * D],
+    HipL: [0, 0, 100 * D], KneeL: [0, 0, -130 * D], HipR: [0, 0, 10 * D], KneeR: [0, 0, -120 * D],
+    ShoulderR: [-0.25, 0, 70 * D], ElbowR: [0, 0, 70 * D], ShoulderL: [0.35, 0, 80 * D], ElbowL: [0, 0, 15 * D],
+  },
+  // 趴姿：整個身體往前倒（root 俯仰），手臂往前持槍
+  prone: {
+    rifle: 'aim', rootPitch: -86 * D, rootLift: 0.18, Head: [0, 0, 70 * D],
+    ShoulderL: [0.3, 0, 160 * D], ElbowL: [0, 0, 20 * D], ShoulderR: [-0.3, 0, 150 * D], ElbowR: [0, 0, 60 * D],
+    HipL: [0.15, 0, 0], HipR: [-0.15, 0, 0],
+  },
+  dead: {
+    rootPitch: 88 * D, rootLift: 0.12, Head: [0, 0.5, 0],
+    ShoulderL: [0.9, 0, 30 * D], ElbowL: [0, 0, 40 * D], ShoulderR: [-0.7, 0, 60 * D], ElbowR: [0, 0, 20 * D],
+    HipL: [0.2, 0, 10 * D], KneeL: [0, 0, -30 * D], HipR: [-0.1, 0, 0],
+  },
+  // 騎乘：坐在馬鞍上、雙腿夾住馬身
+  ride: {
+    hipsY: -0.92,
+    HipL: [0.45, 0, 70 * D], KneeL: [0, 0, -95 * D], HipR: [-0.45, 0, 70 * D], KneeR: [0, 0, -95 * D],
+    ShoulderL: [0, 0, 45 * D], ElbowL: [0, 0, 50 * D], ShoulderR: [0, 0, 45 * D], ElbowR: [0, 0, 50 * D],
+  },
+  rideAim: {
+    rifle: 'aim', hipsY: -0.92, Spine: [0, -0.4, 0], Head: [0, 0.3, 0],
+    HipL: [0.45, 0, 70 * D], KneeL: [0, 0, -95 * D], HipR: [-0.45, 0, 70 * D], KneeR: [0, 0, -95 * D],
+    ShoulderR: [-0.25, 0, 70 * D], ElbowR: [0, 0, 70 * D], ShoulderL: [0.35, 0, 80 * D], ElbowL: [0, 0, 15 * D],
+  },
+  wounded: { hipsY: -0.5, Spine: [0, 0, 25 * D], HipL: [0, 0, 95 * D], KneeL: [0, 0, -95 * D], HipR: [0, 0, 95 * D], KneeR: [0, 0, -95 * D], ShoulderL: [0, 0, 30 * D], ElbowL: [0, 0, 90 * D] },
 };
 
 // 以分部件關節組成的 3D 軍士，動作由程式產生
@@ -48,7 +81,14 @@ export class Soldier {
     this.j = {};
     for (const n of JOINTS) this.j[n] = this.root.getObjectByName(n);
     this.rifle = this.root.getObjectByName('Rifle');
+    if (this.rifle) {
+      this.rifleSlung = { p: this.rifle.position.clone(), r: this.rifle.rotation.clone() };
+      this.rifleAim = { p: new THREE.Vector3(0.24, 0.37, 0.12), r: new THREE.Euler(0, 0, -Math.PI / 2) };
+    }
     this.baseHipsY = this.j.Hips.position.y;
+    this.rootPitch = 0;
+    this.rootLift = 0;
+    this.baseY = 0; // 由外部設定地面高度
     this.name = name;
     this.variant = variant;
     this.pose = pose;
@@ -84,6 +124,13 @@ export class Soldier {
       for (let i = 0; i < 3; i++) c[i] += (t[i] - c[i]) * k;
     }
     this.curHipsY += ((tgt.hipsY ?? 0) - this.curHipsY) * k;
+    this.rootPitch += ((tgt.rootPitch ?? 0) - this.rootPitch) * (snap ? 1 : 0.1);
+    this.rootLift += ((tgt.rootLift ?? 0) - this.rootLift) * (snap ? 1 : 0.1);
+    if (this.rifle) {
+      const r = tgt.rifle === 'aim' ? this.rifleAim : this.rifleSlung;
+      this.rifle.position.copy(r.p);
+      this.rifle.rotation.copy(r.r);
+    }
   }
 
   update(dt, speed = 0) {
@@ -101,6 +148,9 @@ export class Soldier {
       const c = this.cur[n];
       j[n].rotation.set(c[0], c[1], c[2]);
     }
+    // 趴下、倒地：整個身體繞腳底俯仰
+    this.root.rotation.z = this.rootPitch;
+    this.root.position.y = this.baseY + this.rootLift;
     // 呼吸與重心
     j.Spine.rotation.z += breathe;
     j.Hips.position.y = this.baseHipsY + this.curHipsY + w * Math.abs(Math.cos(this.phase)) * 0.03;

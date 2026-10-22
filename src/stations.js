@@ -341,7 +341,7 @@ export class MgStation {
     const dir = X_AXIS.clone().applyQuaternion(_q);
     const blocker = g.train.rayBlocked(muzzle, dir, this.car, 60);
     if (blocker) {
-      if (this.cool <= 0) g.message(`射界受阻：${blocker.name}`, 'alert');
+      if (this.cool <= 0 && !this.silent) g.message(`射界受阻：${blocker.name}`, 'alert');
       this.cool = 0.5;
       return;
     }
@@ -449,7 +449,7 @@ export class ConsoleStation {
       return;
     }
     const est = clamp(hit.dist * (1 + gaussian() * 0.12), hit.dist * 0.75, hit.dist * 1.25);
-    const e = g.targetBook.add({ bearing: bearingMil(dir.x, dir.z), range: Math.round(est / 50) * 50, method: '目測' });
+    const e = g.targetBook.add({ bearing: bearingMil(dir.x, dir.z), range: Math.round(est / 50) * 50, method: '目測', point: origin.clone().addScaledVector(dir, hit.dist) });
     g.emit('mark', { entry: e, target: hit.target });
     g.message(`目標簿 ${e.id}：方位 ${fmtMil(e.bearing)}，目測距離約 ${e.range} m`);
   }
@@ -580,7 +580,7 @@ export class RangefinderStation {
     }
     const sigma = 1.5 + 1.0e-6 * hit.dist * hit.dist;
     const r = Math.max(10, Math.round((hit.dist + gaussian() * sigma) / 5) * 5);
-    const e = g.targetBook.add({ bearing: bearingMil(dir.x, dir.z), range: r, method: '測距' });
+    const e = g.targetBook.add({ bearing: bearingMil(dir.x, dir.z), range: r, method: '測距', point: origin.clone().addScaledVector(dir, hit.dist) });
     g.emit('measure', { entry: e, target: hit.target, dist: hit.dist });
     this.reading = { text: `${r.toLocaleString()} m`, t: 6 };
     g.audio.play('click', origin, 2);
@@ -645,8 +645,8 @@ export class TargetBook {
     this.next = 1;
   }
 
-  add({ bearing, range, method }) {
-    const e = { id: `T${this.next++}`, bearing, range, method, time: this.game.time };
+  add({ bearing, range, method, point = null }) {
+    const e = { id: `T${this.next++}`, bearing, range, method, point, time: this.game.time };
     this.entries.push(e);
     if (this.entries.length > 12) this.entries.shift();
     this.sel = this.entries.length - 1;

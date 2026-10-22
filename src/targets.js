@@ -30,6 +30,12 @@ export class TargetRange {
     this.addVehicle(500, -10);
   }
 
+  // 其他關卡不需要靶場
+  clear() {
+    for (const t of this.list) this.scene.remove(t.group);
+    this.list = [];
+  }
+
   get total() {
     return this.list.length;
   }

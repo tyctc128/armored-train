@@ -6,9 +6,10 @@ const MAX_TRACERS = 600;
 
 // 飛行中的彈丸：即時積分外彈道，處理地面與目標命中
 export class Projectiles {
-  constructor(scene, terrain, targets, onImpact) {
+  // hitTest(a, b, p) 回傳 { kind, target, point, part } 或 null（目標、敵兵、我方車廂、玩家、乘員）
+  constructor(scene, terrain, hitTest, onImpact) {
     this.terrain = terrain;
-    this.targets = targets;
+    this.hitTest = hitTest;
     this.onImpact = onImpact;
     this.list = [];
     this.wind = new THREE.Vector3();
@@ -24,11 +25,22 @@ export class Projectiles {
     );
     this.tracers.frustumCulled = false;
     scene.add(this.tracers);
+    // 敵方曳光（淡綠）
+    const geo2 = new THREE.BufferGeometry();
+    this.enemyPos = new Float32Array(MAX_TRACERS * 6);
+    geo2.setAttribute('position', new THREE.BufferAttribute(this.enemyPos, 3).setUsage(THREE.DynamicDrawUsage));
+    geo2.setDrawRange(0, 0);
+    this.enemyTracers = new THREE.LineSegments(
+      geo2,
+      new THREE.LineBasicMaterial({ color: 0xb8ff9a, transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, fog: false }),
+    );
+    this.enemyTracers.frustumCulled = false;
+    scene.add(this.enemyTracers);
     this._prev = new THREE.Vector3();
   }
 
-  spawn({ pos, vel, k, kind, shell, weapon, tracer = false, source }) {
-    this.list.push({ pos: pos.clone(), vel: vel.clone(), k, kind, shell, weapon, tracer, source, t: 0 });
+  spawn({ pos, vel, k, kind, shell, weapon, tracer = false, source, side = 'friend' }) {
+    this.list.push({ pos: pos.clone(), vel: vel.clone(), k, kind, shell, weapon, tracer, source, side, t: 0 });
   }
 
   update(dt) {
@@ -62,9 +74,9 @@ export class Projectiles {
         p.vel.z -= h * kk * sp * rz;
         p.t += h;
 
-        const target = this.targets.segmentHit(prev, p.pos);
-        if (target) {
-          this.onImpact(p, target.point, target.target, null);
+        const hit = this.hitTest(prev, p.pos, p);
+        if (hit) {
+          this.onImpact(p, hit.point, hit, null);
           done = true;
           break;
         }
@@ -91,22 +103,26 @@ export class Projectiles {
       }
     }
 
-    // 曳光彈
-    let n = 0;
-    const tp = this.tracerPos;
+    // 曳光彈（我方橘色、敵方淡綠）
+    const counts = [0, 0];
     for (const p of this.list) {
-      if (!p.tracer || n >= MAX_TRACERS || p.t < 0.02) continue;
+      if (!p.tracer || p.t < 0.02) continue;
+      const e = p.tracer === 'enemy' ? 1 : 0;
+      if (counts[e] >= MAX_TRACERS) continue;
+      const tp = e ? this.enemyPos : this.tracerPos;
       const len = 0.022;
-      const o = n * 6;
+      const o = counts[e] * 6;
       tp[o] = p.pos.x - p.vel.x * len;
       tp[o + 1] = p.pos.y - p.vel.y * len;
       tp[o + 2] = p.pos.z - p.vel.z * len;
       tp[o + 3] = p.pos.x;
       tp[o + 4] = p.pos.y;
       tp[o + 5] = p.pos.z;
-      n++;
+      counts[e]++;
     }
-    this.tracers.geometry.setDrawRange(0, n * 2);
-    this.tracers.geometry.attributes.position.needsUpdate = true;
+    for (const [mesh, n] of [[this.tracers, counts[0]], [this.enemyTracers, counts[1]]]) {
+      mesh.geometry.setDrawRange(0, n * 2);
+      mesh.geometry.attributes.position.needsUpdate = true;
+    }
   }
 }

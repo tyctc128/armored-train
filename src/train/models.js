@@ -16,6 +16,8 @@ const MODELS = {
   npc_soldier: 'models/crew_soldier.glb',
   npc_crew: 'models/crew_crew.glb',
   npc_officer: 'models/crew_officer.glb',
+  npc_enemy: 'models/crew_enemy.glb',
+  horse: 'models/horse.glb',
 };
 
 export async function loadModels(onProgress) {

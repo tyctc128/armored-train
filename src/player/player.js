@@ -37,7 +37,7 @@ export class Player {
     }
     const run = input.down('ShiftLeft') || input.down('ShiftRight');
     // 車內走道約 3 m/s；車頂、車外約 5 m/s
-    const speed = this.level === 'roof' ? (run ? 5 : 2.6) : run ? 3 : 1.8;
+    const speed = (this.level === 'roof' ? (run ? 5 : 2.6) : run ? 3 : 1.8) * (this.speedMul ?? 1);
     let dx = 0;
     let dz = 0;
     if (mx || mz) {

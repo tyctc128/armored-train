@@ -14,6 +14,11 @@ import { CarGuide } from './guide/carGuide.js';
 import './guide/guide.css';
 import { Tutorial } from './tutorial/tutorial.js';
 import { Crew } from './crew/crew.js';
+import { CrewAI } from './crew/crewAI.js';
+import { Enemies } from './enemy/enemies.js';
+import { Damage } from './combat/damage.js';
+import { LEVELS, LEVEL2, MissionRunner, loadProgress } from './missions/missions.js';
+import './missions/missions.css';
 import './tutorial/tutorial.css';
 import { Player } from './player/player.js';
 import { Effects } from './weapons/effects.js';
@@ -24,7 +29,7 @@ import { WEAPONS } from './data/weapons.js';
 import { TargetRange } from './targets.js';
 import { Audio3D } from './audio.js';
 import { GunStation, MgStation, ConsoleStation, RangefinderStation, TargetBook } from './stations.js';
-import { UI, helpHtml, briefingHtml, firingTableHtml, targetBookHtml } from './ui.js';
+import { UI, helpHtml, briefingHtml, firingTableHtml, targetBookHtml, menuHtml, level2BriefHtml } from './ui.js';
 
 const ui = new UI();
 // 讓載入文字先畫出來（不用 rAF，背景分頁也能繼續載入）
@@ -82,6 +87,11 @@ async function init() {
   const mats = createMaterials();
 
   let tutorial = null;
+  let mission = null;
+  let enemies = null;
+  let damage = null;
+  let crewAI = null;
+  let crew = null;
   const game = {
     time: 0,
     started: false,
@@ -96,7 +106,11 @@ async function init() {
     effects,
     message: (text, kind) => ui.message(text, kind),
     // 遊戲事件（教學關用來判斷步驟是否完成）
-    emit: (type, data) => tutorial?.onEvent(type, data),
+    emit: (type, data) => {
+      tutorial?.onEvent(type, data);
+      mission?.onEvent(type, data);
+      if (type === 'mark') crewAI?.onMark(data.entry);
+    },
   };
 
   const train = new Train(scene, track, mats, {
@@ -112,12 +126,31 @@ async function init() {
 
   game.pick = (origin, dir) => {
     const tDist = terrain.raycast(origin, dir, 15000);
-    const tHit = targets.raycast(origin, dir, tDist ?? 15000);
+    let tHit = targets.raycast(origin, dir, tDist ?? 15000);
+    const eHit = enemies?.raycast(origin, dir, tDist ?? 15000);
+    if (eHit && (!tHit || eHit.dist < tHit.dist)) tHit = eHit;
     if (tHit && (tDist == null || tHit.dist < tDist)) return { dist: tHit.dist, target: tHit.target };
     return tDist == null ? null : { dist: tDist };
   };
 
-  const projectiles = new Projectiles(scene, terrain, targets, (p, point, target, normal) => {
+  // 命中判定：我方彈打靶與敵兵，敵彈打我方車廂、玩家與暴露的乘員
+  const hitTest = (a, b, p) => {
+    if (p.side === 'enemy') return damage?.hitTest(a, b) ?? null;
+    const t = targets.segmentHit(a, b);
+    const e = enemies?.segmentHit(a, b);
+    if (t && (!e || t.point.distanceToSquared(a) <= e.point.distanceToSquared(a))) return { kind: 'target', target: t.target, point: t.point };
+    if (e) return { kind: 'enemy', target: e.target, point: e.point, part: e.part };
+    return null;
+  };
+  const projectiles = new Projectiles(scene, terrain, hitTest, (p, point, hit, normal) => {
+    if (p.side === 'enemy') {
+      if (hit?.kind === 'train') damage.onTrainHit(hit.target, hit.local, hit.normal, p);
+      else if (hit?.kind === 'player') damage.hurt(35 + Math.random() * 30);
+      else if (hit?.kind === 'crew') crew.kill(hit.target);
+      else effects.dust(point, 0.2);
+      return;
+    }
+    const target = hit?.kind === 'target' ? hit.target : null;
     if (p.kind === 'shell') {
       const he = p.shell.he;
       effects.explosion(point, he ? 1 : 0.45);
@@ -128,6 +161,9 @@ async function init() {
       else effects.dust(point, 0.25);
     }
     const res = targets.applyImpact(point, p, target);
+    const er = enemies?.applyImpact(point, p, hit?.kind === 'enemy' ? hit.target : null, hit?.part);
+    if (er?.hit) res.hit = true;
+    if (p.kind === 'shell') crewAI?.onImpact(p, point);
     if (p.kind === 'shell' && res.hit) game.stats.hits++;
     for (const t of res.destroyed) {
       game.message(`${t.name}擊毀（${targets.destroyed}/${targets.total}）`);
@@ -164,7 +200,11 @@ async function init() {
   const guide = new CarGuide(document.getElementById('guide'), train, () => player.where()?.car);
 
   game.camera = camera;
-  const crew = new Crew(train, models, game);
+  crew = new Crew(train, models, game);
+  enemies = new Enemies(scene, terrain, train, models, game);
+  damage = new Damage(game, train, crew);
+  crewAI = new CrewAI(game, crew, stations, enemies, terrain);
+  Object.assign(game, { enemies, damage, crew, crewAI });
 
   // 第一關教學
   tutorial = new Tutorial(
@@ -236,14 +276,56 @@ async function init() {
       game.tableShell = b.dataset.shell;
       ui.modalBody.innerHTML = firingTableHtml(WEAPONS.type14, game.tableShell);
     }
-    if (b.id === 'start-btn' || b.id === 'free-btn') {
-      game.started = true;
-      audio.init();
-      closeModal(true);
-      if (b.id === 'start-btn') tutorial.start();
-    }
+    if (b.id === 'start-btn' || b.id === 'free-btn') startLevel(1, b.id === 'start-btn');
     if (b.id === 'debrief-btn') closeModal(true);
+    const go = b.dataset.goto;
+    if (go === 'menu') {
+      if (game.started) location.href = location.pathname;
+      else ui.openModal('menu', menuHtml(LEVELS, loadProgress()));
+    } else if (go?.startsWith('brief:')) {
+      const id = +go.split(':')[1];
+      ui.openModal('briefing', id === 1 ? briefingHtml() : level2BriefHtml());
+    } else if (go?.startsWith('start:')) {
+      startLevel(+go.split(':')[1]);
+    } else if (go?.startsWith('level:')) {
+      location.href = `${location.pathname}?level=${go.split(':')[1]}`;
+    }
   });
+
+  // 開始關卡：1＝教學（可略過）、2＝沿線巡邏
+  function startLevel(id, withTutorial = false) {
+    game.started = true;
+    game.level = id;
+    audio.init();
+    closeModal(true);
+    if (id === 1) {
+      crewAI.orders.mg = 'hold';
+      if (withTutorial) tutorial.start();
+      return;
+    }
+    targets.clear();
+    document.getElementById('score').classList.add('hidden');
+    mission = new MissionRunner(missionCtx);
+    mission.start(LEVEL2);
+  }
+  const missionCtx = {
+    game,
+    train,
+    get enemies() {
+      return enemies;
+    },
+    get damage() {
+      return damage;
+    },
+    get crew() {
+      return crew;
+    },
+    radio: (who, text) => game.message(`${who}：「${text}」`, 'radio'),
+    showDebrief: (html) => {
+      ui.openModal('debrief', html);
+      input.unlock();
+    },
+  };
   canvas.addEventListener('mousedown', () => {
     if (game.started && !input.locked && !ui.modalName) input.lock();
   });
@@ -268,8 +350,12 @@ async function init() {
         return;
       }
     }
-    if (ui.modalName && input.hit('Escape')) closeModal(false);
+    if (ui.modalName && input.hit('Escape') && !['menu', 'briefing', 'debrief'].includes(ui.modalName)) closeModal(false);
     if (ui.modalName) return;
+    // 乘員命令選單：開啟時數字鍵只用來下令
+    if (input.locked && crewAI.handleInput(input) && crewAI.menuOpen) {
+      for (let i = 1; i <= 9; i++) input.pressed.delete(`Digit${i}`);
+    }
     if (input.hit('KeyG')) {
       game.settings.assist = !game.settings.assist;
       game.message(`射擊輔助：${game.settings.assist ? '開（表尺自動設定）' : '關'}`);
@@ -383,6 +469,7 @@ async function init() {
        <div><span class="k">傳令鐘</span> ${NOTCHES[train.ordered].name}${train.pending ? '（傳令中）' : ''}</div>
        <div><span class="k">位置</span> ${where}${exposed ? '　<span class="warn">⚠ 暴露位置</span>' : ''}</div>
        <div><span class="k">氣象</span> 15°C・無風　<span class="k">輔助</span> ${game.settings.assist ? '<span class="ok">開</span>' : '關'}</div>
+       <div>${damage.statusHtml()}</div>
        ${game.mode === 'third' ? '<div class="acc">第三人稱鏡頭（V 返回）</div>' : ''}`,
     );
     ui.set(
@@ -406,6 +493,12 @@ async function init() {
     }
     if (game.mode === 'walk' && player.auto) prompt = `自動前往 ${player.auto.index + 1}・${player.auto.name}（WASD 取消）`;
     ui.set(ui.prompt, prompt);
+    const cp = document.getElementById('crewpanel');
+    cp.classList.toggle('hidden', !game.started || game.level === 1);
+    if (game.started && game.level !== 1) ui.set(cp, crewAI.statusHtml());
+    const cm = document.getElementById('cmdmenu');
+    cm.classList.toggle('hidden', !crewAI.menuOpen);
+    if (crewAI.menuOpen) ui.set(cm, crewAI.menuHtml());
     trainMap.draw({
       player,
       station: game.mode === 'station' ? game.station : null,
@@ -452,7 +545,11 @@ async function init() {
       targets.update(dt);
       effects.update(dt);
       crew.update(dt);
+      enemies.update(dt);
+      crewAI.update(dt);
+      damage.update(dt);
       tutorial.update(dt);
+      mission?.update(dt);
       audio.updateEngine(dt, train.speed, loco.chimney.getWorldPosition(locoPos));
     }
     applyCamera();
@@ -471,11 +568,15 @@ async function init() {
     const steps = (n, dt = 1 / 60) => {
       for (let i = 0; i < n; i++) step(dt);
     };
-    window.__game = { game, camera, renderer, scene, stations, player, train, targets, steps, guide, openGuide, closeGuide, tutorial };
+    window.__game = { game, camera, renderer, scene, stations, player, train, targets, steps, guide, openGuide, closeGuide, tutorial, get mission() { return mission; } };
   }
 
   ui.loading.classList.add('hidden');
-  ui.openModal('briefing', briefingHtml());
+  // 開場：關卡選單（網址帶 ?level=N 時直接顯示該關簡報）
+  const lv = +new URLSearchParams(location.search).get('level');
+  if (lv === 1) ui.openModal('briefing', briefingHtml());
+  else if (lv === 2) ui.openModal('briefing', level2BriefHtml());
+  else ui.openModal('menu', menuHtml(LEVELS, loadProgress()));
   frame();
 }
 

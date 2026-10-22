@@ -144,6 +144,14 @@ const RECIPES = {
     a.noiseBurst(out, t0, { dur: 0.09, gain: 0.55 * gain, type: 'bandpass', freq: 1400, q: 0.6, cutoff: cut, attack: 0.001 });
     a.tone(out, t0, { freq: 160, dur: 0.05, gain: 0.35 * gain, slide: 0.6 });
   },
+  rifle(a, out, t0, gain, cut) {
+    a.noiseBurst(out, t0, { dur: 0.35, gain: 0.7 * gain, type: 'bandpass', freq: 1800, q: 0.5, cutoff: cut, attack: 0.001 });
+    a.noiseBurst(out, t0 + 0.01, { dur: 0.6, gain: 0.25 * gain, freq: 600, cutoff: cut });
+  },
+  ping(a, out, t0, gain) {
+    a.tone(out, t0, { freq: 2600, dur: 0.18, gain: 0.25 * gain, type: 'triangle', slide: 0.7 });
+    a.noiseBurst(out, t0, { dur: 0.06, gain: 0.3 * gain, type: 'highpass', freq: 3000, attack: 0.001 });
+  },
   click(a, out, t0, gain, cut) {
     a.noiseBurst(out, t0, { dur: 0.04, gain: 0.2 * gain, type: 'highpass', freq: 2500, cutoff: cut, attack: 0.001 });
   },
