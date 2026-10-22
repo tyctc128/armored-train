@@ -3,7 +3,7 @@
 export const LEVELS = [
   { id: 1, name: '試驗運行', sub: '教學關：學會移動、指揮、機槍、測距與主砲', ready: true },
   { id: 2, name: '沿線巡邏', sub: '指揮軍士擊退騎兵與步兵的襲擾，抵達終點站', ready: true },
-  { id: 3, name: '斷軌', sub: '工兵炸毀鐵軌，在敵火下下車搶修', ready: false },
+  { id: 3, name: '斷軌', sub: '工兵炸毀鐵軌，在敵火下下車搶修', ready: true },
   { id: 4, name: '山谷伏擊', sub: '敵軍躲在稜線後，以迫砲與觀測修正反擊', ready: false },
   { id: 5, name: '鋼鐵對決', sub: '迎戰敵方裝甲列車', ready: false },
 ];
@@ -96,6 +96,97 @@ export const LEVEL2 = {
     score -= Math.max(0, stats.minutes - 8) * 4;
     return score >= 94 ? 'S' : score >= 75 ? 'A' : score >= 60 ? 'B' : score >= 40 ? 'C' : 'D';
   },
+  rankNote: '評等依乘員傷亡、預備士兵使用與完成時間計算（8 分鐘內、零傷亡才有 S）。',
+};
+
+// ── 第三關：斷軌 ──
+const BREAK_S = 1850; // 斷軌位置（弧長，約里程 1.85 km）
+const toBreak = (c) => BREAK_S - c.train.sFront;
+
+export const LEVEL3 = {
+  id: 3,
+  title: '斷軌',
+  intro: [
+    ['本部', '第一裝甲列車隊注意：有情報指出敵工兵潛入試驗線沿線，企圖破壞鐵道。命你部巡邏至終點站。'],
+    ['副官', '鐵軌一旦被炸斷，司機要到 150 m 內才看得清楚斷口；車速太快會來不及停車而出軌。'],
+    ['副官', '列車停下後，在車廂連接處按 E 就能下車。修軌只能靠指揮官親自動手，請先讓機槍和十糎砲壓制敵人。'],
+  ],
+  phases: [
+    {
+      text: '以傳令鐘下令「微速」以上，向東出發巡邏',
+      done: (c) => c.train.acknowledged >= 2,
+    },
+    {
+      text: '巡邏前進，注意前方鐵道',
+      hint: '建議以「半速」前進：全速時，司機發現斷軌也來不及停車。',
+      done: (c) => toBreak(c) < 700,
+    },
+    {
+      enter: (c, st) => {
+        c.railBreak.blow(BREAK_S);
+        c.train.setBlock(BREAK_S);
+        const p = c.railBreak.pos;
+        st.eng = c.enemies.spawnInfantry({ x: p.x, side: -1, dist: 25, count: 4, lmg: 0, name: '敵工兵', approach: 0 });
+        st.eng.members.forEach((m, i) => {
+          m.x = p.x + (i - 1.5) * 4;
+          m.z = p.z - 12 - Math.random() * 8;
+        });
+        st.eng.state = 'retreat';
+        st.eng.retreatT = 0;
+        setTimeout(() => c.radio('觀測哨', '前方約 700 m 發生爆炸！鐵軌被炸斷了，敵工兵正往北方逃離！'), 900);
+        setTimeout(() => c.radio('副官', '立即減速停車！'), 4200);
+      },
+      text: (c) => `在斷軌處前停車（距斷口 ${Math.max(0, Math.round(toBreak(c)))} m）`,
+      hint: '用傳令鐘下令「停止」或「微速」：司機看到斷口後會自行煞車，停在斷口前約 15 m。停在 200 m 以內，才不用在敵火下走太遠。',
+      done: (c) => Math.abs(c.train.speed) < 0.2 && toBreak(c) < 200,
+    },
+    {
+      enter: (c, st) => {
+        const p = c.railBreak.pos;
+        c.radio('觀測哨', '伏擊！南北兩側都有敵步兵，正朝斷軌處接近！');
+        st.a = c.enemies.spawnInfantry({ x: p.x - 80, side: -1, dist: 430, count: 10, lmg: 2, name: '北側伏兵' });
+        st.b = c.enemies.spawnInfantry({ x: p.x + 40, side: 1, dist: 560, count: 8, lmg: 1, name: '南側伏兵' });
+        setTimeout(() => c.radio('副官', '在車廂連接處按 E 下車，到紅旗標示的斷口按住 E 修理。修理時你完全暴露，請先壓制敵人！'), 4000);
+      },
+      text: (c) => `下車修復斷軌（進度 ${Math.round(c.railBreak.progress * 100)}%）`,
+      hint: '先按 C 讓機槍、十糎砲壓制伏兵（也可以在指揮台標記目標）。再走到車廂連接處（車廂之間）按 E 下車，到斷口按住 E 修理。受傷時修理變慢。',
+      done: (c) => !c.railBreak.broken,
+    },
+    {
+      enter: (c) => {
+        c.train.setBlock(null);
+        c.radio('副官', '鐵軌修好了！請盡快回到車上。');
+      },
+      text: '回到列車上（在車廂連接處旁按 E 上車）',
+      done: (c) => c.player.level !== 'ground',
+    },
+    {
+      enter: (c) => c.radio('本部', '辛苦了。繼續巡邏，向終點站前進。'),
+      text: '以傳令鐘下令前進，通過修好的路段',
+      done: (c) => c.train.sFront > BREAK_S + 60,
+    },
+    {
+      enter: (c, st) => {
+        c.radio('觀測哨', '南方發現敵騎兵，正朝鐵道衝來！');
+        st.unit = c.enemies.spawnCavalry({ x: Math.min(trainX(c) + 380, 1450), side: 1, dist: 750, count: 10, name: '南方敵騎兵' });
+      },
+      text: (c, st) => `擊退南方騎兵${unitText(st.unit)}`,
+      done: (c, st) => unitDone(st.unit),
+    },
+    {
+      enter: (c) => c.radio('本部', '請駛抵終點站並停車。'),
+      text: '抵達終點站（里程 3.0 km 以後）並停車',
+      done: (c) => c.train.sFront >= c.train.track.length - 260 && Math.abs(c.train.speed) < 0.2 && c.player.level !== 'ground',
+    },
+  ],
+  rank(stats) {
+    let score = 100;
+    score -= stats.crewLost * 8;
+    score -= stats.reservesUsed * 15;
+    score -= Math.max(0, stats.minutes - 10) * 4;
+    return score >= 94 ? 'S' : score >= 75 ? 'A' : score >= 60 ? 'B' : score >= 40 ? 'C' : 'D';
+  },
+  rankNote: '評等依乘員傷亡、預備士兵使用與完成時間計算（10 分鐘內、零傷亡才有 S）。',
 };
 
 // 任務執行：依序推進階段，顯示目標，判定成功與失敗
@@ -130,6 +221,7 @@ export class MissionRunner {
   onEvent(type, data) {
     if (!this.active) return;
     if (type === 'playerDead' && data.final) this.finish(false, '指揮官陣亡');
+    if (type === 'derailed') this.finish(false, '列車衝過斷軌處而出軌');
   }
 
   update() {
@@ -190,7 +282,7 @@ export class MissionRunner {
         <tr><th>使用預備士兵</th><td>${stats.reservesUsed}</td></tr>
         <tr><th>十糎砲發射</th><td>${c.game.stats.shots}</td></tr>
       </table>
-      <p class="note">評等依乘員傷亡、預備士兵使用與完成時間計算（8 分鐘內、零傷亡才有 S）。</p>
+      <p class="note">${this.def.rankNote}</p>
       <div class="brief-btns">
         <button class="start-btn" data-goto="level:${this.def.id}">重新挑戰</button>
         <button class="start-btn secondary" data-goto="menu">回到關卡選單</button>

@@ -136,6 +136,7 @@ export class TrainMap {
       const x = this.px(player.a);
       const y = this.py(player.lat);
       const roof = player.level === 'roof';
+      const ground = player.level === 'ground';
       g.fillStyle = player.exposed ? '#ff6a4d' : '#8fd27a';
       g.strokeStyle = '#111';
       g.lineWidth = 1.5;
@@ -143,14 +144,14 @@ export class TrainMap {
       g.arc(x, y, roof ? 5.5 : 4.5, 0, Math.PI * 2);
       g.fill();
       g.stroke();
-      if (roof) {
+      if (roof || ground) {
         g.fillStyle = '#ff6a4d';
         g.font = 'bold 10px "Microsoft JhengHei", sans-serif';
         g.textAlign = 'center';
-        g.fillText('頂', x, y - 8);
+        g.fillText(roof ? '頂' : '外', x, y - 8);
       }
-      // 面向
-      if (!station) {
+      // 面向（車外時 yaw 是世界方位，不畫）
+      if (!station && !ground) {
         g.strokeStyle = g.fillStyle = player.exposed ? '#ff6a4d' : '#8fd27a';
         g.beginPath();
         g.moveTo(x, y);

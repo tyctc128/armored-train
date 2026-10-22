@@ -2,11 +2,14 @@ import * as THREE from 'three';
 import { FLOOR_Y } from '../train/carModels.js';
 import { BLOCKED, EXPOSED } from '../train/train.js';
 import { clamp } from '../core/math.js';
+import { distToTrack, trackY, TRACK_X0, TRACK_X1 } from '../world/track.js';
 
 const EYE_IN = 1.62;
 const EYE_ROOF = 1.66;
+const EYE_GROUND = 1.65;
 
 // 3D 角色：位置以列車座標表示（a = 距車頭的距離、lat = 橫向、level = 車內／車頂）
+// 下車後（level = 'ground'）改用世界座標 gx、gz，yaw 也改為世界方位
 export class Player {
   constructor(train) {
     this.train = train;
@@ -28,6 +31,7 @@ export class Player {
     const sens = 0.0022;
     this.yaw -= input.mouseDX * sens;
     this.pitch = clamp(this.pitch - input.mouseDY * sens, -1.45, 1.45);
+    if (this.level === 'ground') return this.updateGround(dt, input);
 
     const mz = (input.down('KeyW') ? 1 : 0) - (input.down('KeyS') ? 1 : 0);
     const mx = (input.down('KeyD') ? 1 : 0) - (input.down('KeyA') ? 1 : 0);
@@ -73,6 +77,131 @@ export class Player {
 
   where() {
     return this.train.carAt(this.a);
+  }
+
+  // ── 下車（車外地面）──
+  // 車廂連接處的兩側出口：side = -1 左（北）、+1 右（南）
+  exitPoint(gapIndex, side, out) {
+    const car = this.train.cars[gapIndex];
+    return out.set(-car.len / 2 - 0.5, 0, side * 2.3).applyMatrix4(car.group.matrixWorld);
+  }
+
+  // 在車廂連接處下車：依面向決定從哪一側下車
+  dismount(terrain) {
+    const w = this.where();
+    if (!w || !w.inGap || this.level !== 'in') return false;
+    const gap = w.x > 0 ? w.index - 1 : w.index;
+    if (gap < 0 || gap >= this.train.cars.length - 1) return false;
+    const car = this.train.cars[gap];
+    const f = new THREE.Vector3(1, 0, 0).transformDirection(car.group.matrixWorld);
+    const r = new THREE.Vector3(0, 0, 1).transformDirection(car.group.matrixWorld);
+    const side = -Math.sin(this.yaw) >= 0 ? 1 : -1;
+    const p = this.exitPoint(gap, side, new THREE.Vector3());
+    // 面向換成世界方位
+    const dir = f.multiplyScalar(Math.cos(this.yaw)).addScaledVector(r, -Math.sin(this.yaw));
+    this.yaw = Math.atan2(-dir.z, dir.x);
+    this.terrain = terrain;
+    this.gx = p.x;
+    this.gz = p.z;
+    this.level = 'ground';
+    this.auto = null;
+    this.exposed = true;
+    this.syncTrainCoords();
+    return true;
+  }
+
+  // 附近的上車處（車廂連接處兩側）
+  boardingGap() {
+    const p = new THREE.Vector3();
+    for (let i = 0; i < this.train.cars.length - 1; i++) {
+      for (const side of [-1, 1]) {
+        this.exitPoint(i, side, p);
+        if (Math.hypot(p.x - this.gx, p.z - this.gz) < 1.8) return i;
+      }
+    }
+    return -1;
+  }
+
+  board(gap) {
+    const car = this.train.cars[gap];
+    const f = new THREE.Vector3(1, 0, 0).transformDirection(car.group.matrixWorld);
+    const r = new THREE.Vector3(0, 0, 1).transformDirection(car.group.matrixWorld);
+    const dx = Math.cos(this.yaw);
+    const dz = -Math.sin(this.yaw);
+    this.yaw = Math.atan2(-(dx * r.x + dz * r.z), dx * f.x + dz * f.z);
+    this.a = car.offset + car.len + 0.5;
+    this.lat = 0;
+    this.level = 'in';
+    this.exposed = this.train.walkable(this.a, this.lat, 'in') === EXPOSED;
+  }
+
+  groundY(x, z) {
+    return groundHeight(this.terrain, x, z);
+  }
+
+  updateGround(dt, input) {
+    const mz = (input.down('KeyW') ? 1 : 0) - (input.down('KeyS') ? 1 : 0);
+    const mx = (input.down('KeyD') ? 1 : 0) - (input.down('KeyA') ? 1 : 0);
+    const run = input.down('ShiftLeft') || input.down('ShiftRight');
+    const speed = (run ? 5 : 2.2) * (this.speedMul ?? 1);
+    this.moving = 0;
+    if (mx || mz) {
+      const fx = Math.cos(this.yaw);
+      const fz = -Math.sin(this.yaw);
+      let dx = fx * mz + Math.sin(this.yaw) * mx;
+      let dz = fz * mz + Math.cos(this.yaw) * mx;
+      const n = Math.hypot(dx, dz);
+      dx = (dx / n) * speed * dt;
+      dz = (dz / n) * speed * dt;
+      // 不能穿過車廂
+      if (!this.hitsTrain(this.gx + dx, this.gz + dz)) {
+        this.gx += dx;
+        this.gz += dz;
+        this.moving = speed;
+      } else if (!this.hitsTrain(this.gx + dx, this.gz)) {
+        this.gx += dx;
+        this.moving = speed;
+      } else if (!this.hitsTrain(this.gx, this.gz + dz)) {
+        this.gz += dz;
+        this.moving = speed;
+      }
+    }
+    if (this.moving) this.bobPhase += dt * speed * 2.4;
+    this.exposed = true;
+    this.syncTrainCoords();
+  }
+
+  hitsTrain(x, z) {
+    const p = new THREE.Vector3();
+    const inv = new THREE.Matrix4();
+    for (const car of this.train.cars) {
+      p.set(x, car.group.position.y + 1, z).applyMatrix4(inv.copy(car.group.matrixWorld).invert());
+      if (Math.abs(p.x) < car.len / 2 + 0.25 && Math.abs(p.z) < 1.9) return true;
+    }
+    return false;
+  }
+
+  // 列車簡圖用：把地面位置換算成列車座標（距車頭、橫向）
+  syncTrainCoords() {
+    const p = new THREE.Vector3();
+    const inv = new THREE.Matrix4();
+    for (const car of this.train.cars) {
+      p.set(this.gx, car.group.position.y, this.gz).applyMatrix4(inv.copy(car.group.matrixWorld).invert());
+      if (Math.abs(p.x) <= car.len / 2 + 0.6) {
+        this.a = car.offset + car.len / 2 - p.x;
+        this.lat = clamp(p.z, -3, 3);
+        return;
+      }
+    }
+    const front = this.train.cars[0];
+    p.set(this.gx, front.group.position.y, this.gz).applyMatrix4(inv.copy(front.group.matrixWorld).invert());
+    this.a = p.x > 0 ? 0 : this.train.totalLength;
+    this.lat = clamp(p.z, -3, 3);
+  }
+
+  groundEye(out) {
+    const bob = this.moving ? Math.sin(this.bobPhase) * 0.04 : 0;
+    return out.set(this.gx, this.groundY(this.gx, this.gz) + EYE_GROUND + bob, this.gz);
   }
 
   // ── 自動走到指定車廂（數字鍵 1–8）──
@@ -158,6 +287,13 @@ export class Player {
   }
 
   applyCamera(camera) {
+    if (this.level === 'ground') {
+      this.groundEye(camera.position);
+      this._e.set(this.pitch, this.yaw - Math.PI / 2, 0, 'YXZ');
+      camera.quaternion.setFromEuler(this._e);
+      camera.fov = 70;
+      return;
+    }
     const { car, pos } = this.eyeLocal(this._v);
     camera.position.copy(pos).applyMatrix4(car.group.matrixWorld);
     car.group.getWorldQuaternion(this._q);
@@ -165,4 +301,14 @@ export class Player {
     camera.quaternion.copy(this._q).multiply(new THREE.Quaternion().setFromEuler(this._e));
     camera.fov = 70;
   }
+}
+
+// 地面高度：鐵道道碴上較高，其餘依地形
+export function groundHeight(terrain, x, z) {
+  const h = terrain.heightAt(x, z);
+  const d = distToTrack(x, z);
+  if (d > 3.2) return h;
+  const top = trackY(clamp(x, TRACK_X0, TRACK_X1)) - 0.33;
+  if (d < 1.75) return Math.max(h, top);
+  return Math.max(h, top + ((d - 1.75) / 1.45) * -0.67);
 }

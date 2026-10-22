@@ -12,6 +12,8 @@ export const NOTCHES = [
 ];
 const ORDER_DELAY = 2.0;
 const BRAKE = 0.5;
+const EMERGENCY = 0.8;   // 緊急煞車
+const SIGHT = 150;       // 司機看得到斷軌的距離
 const UP = new THREE.Vector3(0, 1, 0);
 
 // 走動判定結果：0 不可通行、1 車內（有掩護）、2 暴露位置
@@ -38,6 +40,8 @@ export class Train {
     this.pending = null;
     this.distance = 0;
     this.endWarned = false;
+    this.blockS = null;     // 前方斷軌位置（弧長）；null 表示路線暢通
+    this.derailed = false;
 
     this._p1 = new THREE.Vector3();
     this._p2 = new THREE.Vector3();
@@ -70,6 +74,10 @@ export class Train {
         this.hooks.bell(true);
       }
     }
+    if (this.derailed) {
+      this.speed = 0;
+      return;
+    }
     let target = NOTCHES[this.acknowledged].v;
 
     // 路線終點保護：司機自行減速
@@ -89,9 +97,25 @@ export class Train {
       this.endWarned = false;
     }
 
+    // 斷軌：司機在 150 m 內才看得到，看到後緊急煞車停在斷口前；太快就來不及
+    let emergency = false;
+    if (this.blockS != null && this.speed >= 0) {
+      const room = this.blockS - 12 - this.sFront;
+      if (room < SIGHT && (target > 0 || this.speed > 0.05)) {
+        if (target > 0 && room < (this.speed * this.speed) / (2 * EMERGENCY) + 3) {
+          target = 0;
+          emergency = this.speed > 0.05;
+          if (!this.blockWarned) {
+            this.hooks.message('司機：「前方鐵軌斷裂！緊急煞車！」', 'alert');
+            this.blockWarned = true;
+          }
+        }
+      }
+    }
+
     const traction = 0.32 * (1 - (0.6 * Math.abs(this.speed)) / 16.7);
     const braking = this.speed !== 0 && Math.sign(target - this.speed) !== Math.sign(this.speed);
-    const a = braking ? BRAKE : traction;
+    const a = braking ? (emergency ? EMERGENCY : BRAKE) : traction;
     this.speed += clamp(target - this.speed, -a * dt, a * dt);
     this.sFront += this.speed * dt;
     const min = this.totalLength + 2;
@@ -101,6 +125,17 @@ export class Train {
       this.speed = 0;
     }
     this.distance += this.speed * dt;
+    if (this.blockS != null && this.sFront > this.blockS) {
+      this.derailed = true;
+      this.speed = 0;
+      this.hooks.derail?.();
+    }
+  }
+
+  // 前方鐵軌被炸斷（s 為弧長）；null 表示修復完成
+  setBlock(s) {
+    this.blockS = s;
+    this.blockWarned = false;
   }
 
   updateTransforms(time) {

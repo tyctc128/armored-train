@@ -17,7 +17,8 @@ import { Crew } from './crew/crew.js';
 import { CrewAI } from './crew/crewAI.js';
 import { Enemies } from './enemy/enemies.js';
 import { Damage } from './combat/damage.js';
-import { LEVELS, LEVEL2, MissionRunner, loadProgress } from './missions/missions.js';
+import { LEVELS, LEVEL2, LEVEL3, MissionRunner, loadProgress } from './missions/missions.js';
+import { RailBreak } from './world/railBreak.js';
 import './missions/missions.css';
 import './tutorial/tutorial.css';
 import { Player } from './player/player.js';
@@ -29,7 +30,7 @@ import { WEAPONS } from './data/weapons.js';
 import { TargetRange } from './targets.js';
 import { Audio3D } from './audio.js';
 import { GunStation, MgStation, ConsoleStation, RangefinderStation, TargetBook } from './stations.js';
-import { UI, helpHtml, briefingHtml, firingTableHtml, targetBookHtml, menuHtml, level2BriefHtml } from './ui.js';
+import { UI, helpHtml, briefingHtml, firingTableHtml, targetBookHtml, menuHtml, level2BriefHtml, level3BriefHtml } from './ui.js';
 
 const ui = new UI();
 // 讓載入文字先畫出來（不用 rAF，背景分頁也能繼續載入）
@@ -116,8 +117,17 @@ async function init() {
   const train = new Train(scene, track, mats, {
     message: game.message,
     bell: (ack) => audio.play('bell', train.cars[4].console.anchor.getWorldPosition(new THREE.Vector3()), ack ? 0.6 : 1),
+    derail: () => {
+      const p = train.cars[0].group.position;
+      effects.explosion(p, 0.5);
+      audio.play('explosion', p, 1.2);
+      game.message('列車衝過斷口，車頭出軌！', 'alert');
+      game.emit('derailed');
+    },
   }, models);
   game.train = train;
+  const railBreak = new RailBreak(scene, track, game);
+  game.railBreak = railBreak;
   train.updateTransforms(0);
 
   const targets = new TargetRange(scene, terrain, effects);
@@ -284,7 +294,7 @@ async function init() {
       else ui.openModal('menu', menuHtml(LEVELS, loadProgress()));
     } else if (go?.startsWith('brief:')) {
       const id = +go.split(':')[1];
-      ui.openModal('briefing', id === 1 ? briefingHtml() : level2BriefHtml());
+      ui.openModal('briefing', briefOf(id));
     } else if (go?.startsWith('start:')) {
       startLevel(+go.split(':')[1]);
     } else if (go?.startsWith('level:')) {
@@ -292,7 +302,11 @@ async function init() {
     }
   });
 
-  // 開始關卡：1＝教學（可略過）、2＝沿線巡邏
+  function briefOf(id) {
+    return id === 1 ? briefingHtml() : id === 3 ? level3BriefHtml() : level2BriefHtml();
+  }
+
+  // 開始關卡：1＝教學（可略過）、2＝沿線巡邏、3＝斷軌
   function startLevel(id, withTutorial = false) {
     game.started = true;
     game.level = id;
@@ -306,7 +320,7 @@ async function init() {
     targets.clear();
     document.getElementById('score').classList.add('hidden');
     mission = new MissionRunner(missionCtx);
-    mission.start(LEVEL2);
+    mission.start(id === 3 ? LEVEL3 : LEVEL2);
   }
   const missionCtx = {
     game,
@@ -320,6 +334,8 @@ async function init() {
     get crew() {
       return crew;
     },
+    player,
+    railBreak,
     radio: (who, text) => game.message(`${who}：「${text}」`, 'radio'),
     showDebrief: (html) => {
       ui.openModal('debrief', html);
@@ -364,8 +380,13 @@ async function init() {
 
   // ── 互動：崗位與艙口 ──
   function nearestInteractable() {
+    if (player.level === 'ground') {
+      const gap = player.boardingGap();
+      return gap >= 0 ? { kind: 'board', gap } : null;
+    }
     const w = player.where();
     if (!w) return null;
+    if (w.inGap && player.level === 'in' && Math.abs(player.lat) <= 0.5) return { kind: 'dismount' };
     let best = null;
     let bestD = 1e9;
     if (player.level === 'in' && !w.inGap) {
@@ -412,14 +433,34 @@ async function init() {
       return;
     }
     for (let i = 0; i < train.cars.length; i++) {
-      if (input.hit(`Digit${i + 1}`)) player.startAuto(i, game.message);
+      if (input.hit(`Digit${i + 1}`)) {
+        if (player.level === 'ground') game.message('在車外無法自動移動，請先上車', 'alert');
+        else player.startAuto(i, game.message);
+      }
     }
     player.update(dt, input);
+    // 修軌：在斷口按住 E
+    if (player.level === 'ground' && railBreak.near(player.gx, player.gz)) {
+      player.repairing = input.down('KeyE');
+      if (player.repairing && railBreak.work(dt, damage.hp < 40 ? 0.6 : 1)) {
+        game.message('鐵軌修復完成！');
+        game.emit('repaired');
+      }
+      if (player.repairing) return;
+    } else {
+      player.repairing = false;
+    }
     if (input.hit('KeyE')) {
       player.cancelAuto();
       const it = nearestInteractable();
       if (!it) return;
-      if (it.kind === 'hatch') {
+      if (it.kind === 'dismount') {
+        if (Math.abs(train.speed) > 0.3) game.message('列車行進中，無法下車', 'alert');
+        else if (player.dismount(terrain)) game.message('下車（暴露位置）：小心敵火！');
+      } else if (it.kind === 'board') {
+        player.board(it.gap);
+        game.message('回到列車上');
+      } else if (it.kind === 'hatch') {
         const up = player.level === 'in';
         if (player.toggleLevel()) game.message(up ? '爬上車頂（暴露位置）' : '回到車內');
         else game.message('此處無法通行', 'alert');
@@ -461,7 +502,9 @@ async function init() {
     const kmh = (train.speed * 3.6).toFixed(0);
     let where;
     if (game.mode === 'station') where = game.station.label;
+    else if (player.level === 'ground') where = '車外地面';
     else where = `${w.inGap ? '車廂連接處' : w.car.name}・${player.level === 'in' ? '車內' : '車頂'}`;
+    const rail = railBreak.broken ? `<div><span class="k">斷軌處</span> <span class="warn">距車頭 ${Math.max(0, Math.round(railBreak.s - train.sFront))} m</span>・修復 ${Math.round(railBreak.progress * 100)}%</div>` : '';
     const exposed = game.mode === 'walk' && player.exposed;
     ui.set(
       ui.status,
@@ -470,6 +513,7 @@ async function init() {
        <div><span class="k">位置</span> ${where}${exposed ? '　<span class="warn">⚠ 暴露位置</span>' : ''}</div>
        <div><span class="k">氣象</span> 15°C・無風　<span class="k">輔助</span> ${game.settings.assist ? '<span class="ok">開</span>' : '關'}</div>
        <div>${damage.statusHtml()}</div>
+       ${rail}
        ${game.mode === 'third' ? '<div class="acc">第三人稱鏡頭（V 返回）</div>' : ''}`,
     );
     ui.set(
@@ -487,7 +531,10 @@ async function init() {
     let prompt = '';
     if (game.mode === 'walk') {
       const it = nearestInteractable();
-      if (it?.kind === 'hatch') prompt = `按 E：${player.level === 'in' ? '經艙口爬上車頂' : '經艙口回到車內'}`;
+      if (player.level === 'ground' && railBreak.near(player.gx, player.gz)) prompt = player.repairing ? `修理中… ${Math.round(railBreak.progress * 100)}%（放開 E 暫停）` : `按住 E：修復鐵軌（${Math.round(railBreak.progress * 100)}%）`;
+      else if (it?.kind === 'dismount') prompt = Math.abs(train.speed) > 0.3 ? '列車停下後，可在此按 E 下車' : '按 E：下車（暴露位置）';
+      else if (it?.kind === 'board') prompt = '按 E：上車';
+      else if (it?.kind === 'hatch') prompt = `按 E：${player.level === 'in' ? '經艙口爬上車頂' : '經艙口回到車內'}`;
       else if (it?.s.obj) prompt = `按 E：${it.s.label}`;
       else if (it) prompt = it.s.label;
     }
@@ -568,14 +615,14 @@ async function init() {
     const steps = (n, dt = 1 / 60) => {
       for (let i = 0; i < n; i++) step(dt);
     };
-    window.__game = { game, camera, renderer, scene, stations, player, train, targets, steps, guide, openGuide, closeGuide, tutorial, get mission() { return mission; } };
+    window.__game = { game, camera, renderer, scene, stations, player, train, targets, steps, railBreak, input, damage, guide, openGuide, closeGuide, tutorial, get mission() { return mission; } };
   }
 
   ui.loading.classList.add('hidden');
   // 開場：關卡選單（網址帶 ?level=N 時直接顯示該關簡報）
   const lv = +new URLSearchParams(location.search).get('level');
   if (lv === 1) ui.openModal('briefing', briefingHtml());
-  else if (lv === 2) ui.openModal('briefing', level2BriefHtml());
+  else if (lv === 2 || lv === 3) ui.openModal('briefing', briefOf(lv));
   else ui.openModal('menu', menuHtml(LEVELS, loadProgress()));
   frame();
 }

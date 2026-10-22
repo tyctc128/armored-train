@@ -74,6 +74,7 @@ export function helpHtml() {
       <div>車內走道最快約 3 m/s；車頂、車外約 5 m/s，但屬<b>暴露位置</b></div>
       <div><kbd>1</kbd>–<kbd>8</kbd> 自動走到第 1–8 節車廂（車頭起算，見右下角簡圖）；按 WASD 取消</div>
       <div><kbd>E</kbd> 上崗／離開崗位、經艙口上下車頂</div>
+      <div>列車停止時，在車廂連接處按 <kbd>E</kbd> 下車；車外走到連接處旁按 <kbd>E</kbd> 上車</div>
       <div><kbd>V</kbd> 第三人稱列車鏡頭（只能看）</div>
     </div>
     <div>
@@ -141,6 +142,25 @@ export function level2BriefHtml() {
   <div class="note">指揮官陣亡時由預備士兵接替（3 名）；用完即任務失敗。</div>
   <div class="brief-btns">
     <button class="start-btn" data-goto="start:2">出發</button>
+    <button class="start-btn secondary" data-goto="menu">返回</button>
+  </div>`;
+}
+
+export function level3BriefHtml() {
+  return `
+  <h2>電報：第三關　斷軌</h2>
+  <div>第一裝甲列車隊 指揮官 收</div>
+  <div>據報敵工兵潛入試驗線沿線，企圖炸毀鐵道、截斷交通。命你部自起點站出發，巡邏至終點站；鐵道如遭破壞，<b>就地搶修後繼續前進</b>。</div>
+  <h3>情報</h3>
+  <div>敵工兵完成爆破後會撤離，並由埋伏的步兵班掩護。伏兵可能出現在鐵道南北兩側，配有輕機槍。</div>
+  <h3>斷軌處置要領</h3>
+  <div>① <b>控制車速</b>：司機要到斷口前約 150 m 才看得清楚。半速以下可以及時停車；全速時來不及，列車會出軌（任務失敗）。</div>
+  <div>② <b>先壓制，再下車</b>：按 <kbd>C</kbd> 讓機槍與十糎砲射擊伏兵，或親自操作。</div>
+  <div>③ <b>下車搶修</b>：在<b>車廂連接處</b>（車廂之間的平台）按 <kbd>E</kbd> 下車，走到紅旗標示的斷口，<b>按住 <kbd>E</kbd></b> 修理（約 25 秒，可分次完成）。車外完全暴露，受傷時修理會變慢。</div>
+  <div>④ 修好後回到車廂連接處旁按 <kbd>E</kbd> 上車，下令前進。</div>
+  <div class="note">指揮官陣亡時由預備士兵接替（3 名）；用完即任務失敗。10 分鐘內、零傷亡才有 S。</div>
+  <div class="brief-btns">
+    <button class="start-btn" data-goto="start:3">出發</button>
     <button class="start-btn secondary" data-goto="menu">返回</button>
   </div>`;
 }
