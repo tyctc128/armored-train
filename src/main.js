@@ -10,6 +10,8 @@ import { createMaterials } from './train/carModels.js';
 import { Train, NOTCHES } from './train/train.js';
 import { loadModels } from './train/models.js';
 import { TrainMap } from './trainMap.js';
+import { CarGuide } from './guide/carGuide.js';
+import './guide/guide.css';
 import { Player } from './player/player.js';
 import { Effects } from './weapons/effects.js';
 import { Projectiles } from './weapons/projectiles.js';
@@ -149,13 +151,38 @@ async function init() {
   const player = new Player(train);
   game.player = player;
   const trainMap = new TrainMap(document.getElementById('trainmap'), train);
+  const guide = new CarGuide(document.getElementById('guide'), train, () => player.where()?.car);
 
   // ── 彈出視窗與暫停 ──
   const pause = ui.pause;
   input.onLockChange = (locked) => {
-    pause.classList.toggle('hidden', locked || !game.started || !!ui.modalName);
+    pause.classList.toggle('hidden', locked || !game.started || !!ui.modalName || ui.guideOpen);
   };
   pause.addEventListener('click', () => input.lock());
+
+  // 車廂圖鑑：開啟時遊戲暫停，預設顯示玩家所在的車廂
+  function openGuide() {
+    if (!game.started || ui.guideOpen) return;
+    if (ui.modalName) ui.closeModal();
+    ui.guideOpen = true;
+    const w = player.where();
+    guide.open(Math.max(0, train.cars.indexOf(w?.car)));
+    input.unlock();
+    pause.classList.add('hidden');
+  }
+  function closeGuide(relock) {
+    guide.close();
+    ui.guideOpen = false;
+    clock.getDelta();
+    if (relock) input.lock();
+    pause.classList.toggle('hidden', input.locked || !game.started);
+  }
+  guide.onClose = () => closeGuide(true);
+  document.getElementById('guide-btn').addEventListener('click', openGuide);
+  document.getElementById('pause-guide').addEventListener('click', (e) => {
+    e.stopPropagation();
+    openGuide();
+  });
 
   function openModal(name) {
     let html = '';
@@ -189,6 +216,16 @@ async function init() {
 
   function handleGlobalKeys() {
     if (!game.started) return;
+    if (ui.guideOpen) {
+      if (input.hit('KeyI')) closeGuide(true);
+      else if (input.hit('Escape')) closeGuide(false);
+      else for (const code of input.pressed) guide.handleKey(code);
+      return;
+    }
+    if (input.hit('KeyI')) {
+      openGuide();
+      return;
+    }
     const keys = { KeyH: 'help', KeyT: 'table', KeyB: 'book' };
     for (const [code, name] of Object.entries(keys)) {
       if (input.hit(code)) {
@@ -356,6 +393,12 @@ async function init() {
   }
   function step(dt) {
     handleGlobalKeys();
+    if (ui.guideOpen) {
+      // 圖鑑開啟時遊戲暫停，只繪製圖鑑的 3D 檢視
+      guide.update(dt);
+      input.endFrame();
+      return;
+    }
     const paused = !game.started || (!input.locked && !ui.modalName);
     if (!paused) {
       game.time += dt;
@@ -385,7 +428,7 @@ async function init() {
     const steps = (n, dt = 1 / 60) => {
       for (let i = 0; i < n; i++) step(dt);
     };
-    window.__game = { game, camera, renderer, scene, stations, player, train, targets, steps };
+    window.__game = { game, camera, renderer, scene, stations, player, train, targets, steps, guide, openGuide, closeGuide };
   }
 
   ui.loading.classList.add('hidden');

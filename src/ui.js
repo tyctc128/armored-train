@@ -79,6 +79,7 @@ export function helpHtml() {
     <div>
       <h3>隨時可用</h3>
       <div><kbd>T</kbd> 射表手冊　<kbd>B</kbd> 目標簿　<kbd>H</kbd> 本說明</div>
+      <div><kbd>I</kbd> 車廂圖鑑：各車廂 3D 介紹、內裝與操作（開啟時遊戲暫停）</div>
       <div><kbd>G</kbd> 切換射擊輔助（表尺自動依目標簿距離設定）</div>
       <div><kbd>Esc</kbd> 暫停</div>
     </div>
