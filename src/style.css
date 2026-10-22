@@ -1,0 +1,164 @@
+:root {
+  --ink: #e8e3cf;
+  --ink-dim: #a9a48f;
+  --accent: #e0b25a;
+  --danger: #ff6a4d;
+  --ok: #8fd27a;
+  --panel: rgba(18, 20, 14, 0.72);
+  --line: rgba(232, 227, 207, 0.18);
+  font-family: 'Noto Sans TC', 'Microsoft JhengHei', 'PingFang TC', sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: #0d0e0a;
+  color: var(--ink);
+}
+
+#game, #overlay {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  display: block;
+}
+#overlay { pointer-events: none; }
+
+.hidden { display: none !important; }
+
+#hud { position: fixed; inset: 0; pointer-events: none; font-size: 14px; }
+
+.panel {
+  position: absolute;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 8px 12px;
+  line-height: 1.6;
+  font-variant-numeric: tabular-nums;
+}
+.panel .k { color: var(--ink-dim); }
+.panel .v { color: var(--ink); }
+.panel .warn { color: var(--danger); font-weight: 700; }
+.panel .ok { color: var(--ok); }
+.panel .acc { color: var(--accent); }
+
+#status { top: 12px; left: 12px; min-width: 250px; }
+#score { top: 12px; right: 12px; min-width: 190px; text-align: right; }
+#weapon { bottom: 12px; right: 12px; min-width: 290px; }
+
+.bar { height: 6px; background: rgba(255,255,255,0.12); border-radius: 3px; overflow: hidden; margin: 2px 0 4px; }
+.bar > i { display: block; height: 100%; background: var(--accent); }
+
+#messages {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  width: min(520px, 60vw);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+#messages .msg {
+  background: var(--panel);
+  border-left: 3px solid var(--accent);
+  padding: 4px 10px;
+  transition: opacity 1s;
+}
+#messages .msg.radio { border-left-color: #7fb6e0; }
+#messages .msg.alert { border-left-color: var(--danger); }
+
+#prompt {
+  position: absolute;
+  left: 50%;
+  top: 62%;
+  transform: translateX(-50%);
+  background: var(--panel);
+  padding: 6px 14px;
+  border-radius: 4px;
+  border: 1px solid var(--line);
+}
+#prompt:empty { display: none; }
+
+#dot {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 4px;
+  height: 4px;
+  margin: -2px 0 0 -2px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.75);
+}
+
+#modal, #pause, #loading {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(5, 6, 4, 0.55);
+}
+#loading { background: #0d0e0a; z-index: 10; }
+
+#modal-card {
+  background: #1b1d15;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  width: min(980px, 94vw);
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+}
+#modal-body { padding: 18px 22px; overflow: auto; line-height: 1.65; }
+#modal-foot { padding: 8px 22px; color: var(--ink-dim); border-top: 1px solid var(--line); font-size: 13px; }
+#modal-body h2 { margin: 0 0 8px; color: var(--accent); }
+#modal-body h3 { margin: 16px 0 6px; color: var(--accent); font-size: 15px; }
+#modal-body table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; font-size: 13px; }
+#modal-body th, #modal-body td { border-bottom: 1px solid var(--line); padding: 3px 8px; text-align: right; }
+#modal-body th { color: var(--ink-dim); font-weight: 500; position: sticky; top: -18px; background: #1b1d15; }
+#modal-body td:first-child, #modal-body th:first-child { text-align: left; }
+#modal-body kbd {
+  display: inline-block;
+  min-width: 1.6em;
+  padding: 0 5px;
+  border: 1px solid var(--line);
+  border-bottom-width: 2px;
+  border-radius: 3px;
+  background: #2a2c22;
+  font-family: inherit;
+  text-align: center;
+}
+#modal-body .cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 4px 24px; }
+#modal-body .tabs { display: flex; gap: 8px; margin: 6px 0 10px; }
+#modal-body .tabs button {
+  background: #2a2c22; color: var(--ink); border: 1px solid var(--line); border-radius: 4px; padding: 4px 12px; cursor: pointer; font: inherit;
+}
+#modal-body .tabs button.on { background: var(--accent); color: #1b1d15; }
+#modal-body .note { color: var(--ink-dim); font-size: 13px; }
+#modal-body tr.sel td { background: rgba(224, 178, 90, 0.18); }
+
+.pause-card {
+  background: #1b1d15;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 22px 34px;
+  text-align: center;
+}
+.pause-card h1 { margin: 0 0 8px; letter-spacing: 0.3em; color: var(--accent); }
+.pause-card h2 { margin: 0 0 8px; color: var(--accent); }
+.start-btn {
+  margin-top: 12px;
+  background: var(--accent);
+  color: #1b1d15;
+  border: 0;
+  border-radius: 4px;
+  padding: 8px 26px;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}

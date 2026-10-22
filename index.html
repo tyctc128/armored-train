@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>鋼軌堡壘</title>
+  </head>
+  <body>
+    <canvas id="game"></canvas>
+    <canvas id="overlay"></canvas>
+
+    <div id="hud">
+      <div id="status" class="panel"></div>
+      <div id="score" class="panel"></div>
+      <div id="weapon" class="panel hidden"></div>
+      <div id="messages"></div>
+      <div id="prompt"></div>
+      <div id="dot"></div>
+    </div>
+
+    <div id="modal" class="hidden">
+      <div id="modal-card">
+        <div id="modal-body"></div>
+        <div id="modal-foot">按相同按鍵或 Esc 關閉</div>
+      </div>
+    </div>
+
+    <div id="pause" class="hidden">
+      <div class="pause-card">
+        <h2>暫停中</h2>
+        <p>點擊畫面繼續　｜　按 H 查看操作說明</p>
+      </div>
+    </div>
+
+    <div id="loading">
+      <div class="pause-card">
+        <h1>鋼軌堡壘</h1>
+        <p id="loading-text">載入中…</p>
+      </div>
+    </div>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

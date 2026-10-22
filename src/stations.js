@@ -1,0 +1,647 @@
+import * as THREE from 'three';
+import { WEAPONS } from './data/weapons.js';
+import { lookupElevation } from './weapons/firingTable.js';
+import { NOTCHES } from './train/train.js';
+import { DEG, clamp, wrapAngle, toMil, fromMil, fmtMil, bearingMil, gaussian, MIL_PER_RAD } from './core/math.js';
+
+const X_AXIS = new THREE.Vector3(1, 0, 0);
+const _q = new THREE.Quaternion();
+const _q2 = new THREE.Quaternion();
+const _e = new THREE.Euler(0, 0, 0, 'YXZ');
+const _v = new THREE.Vector3();
+const _d = new THREE.Vector3();
+
+// 以參考物件的世界旋轉，再加上本地俯仰／方向（相機預設朝 -Z，轉成朝 +X）
+function viewQuat(ref, pitch, yaw, out) {
+  ref.getWorldQuaternion(_q2);
+  _e.set(pitch, yaw - Math.PI / 2, 0, 'YXZ');
+  return out.copy(_q2).multiply(_q.setFromEuler(_e));
+}
+
+function pxPerMil(camera, H) {
+  return H / 2 / Math.tan((camera.fov * DEG) / 2) / MIL_PER_RAD;
+}
+
+function scopeMask(g, W, H, r) {
+  g.save();
+  g.fillStyle = 'rgba(0,0,0,0.92)';
+  g.beginPath();
+  g.rect(0, 0, W, H);
+  g.arc(W / 2, H / 2, r, 0, Math.PI * 2, true);
+  g.fill('evenodd');
+  g.restore();
+  g.strokeStyle = 'rgba(0,0,0,0.9)';
+  g.lineWidth = 6;
+  g.beginPath();
+  g.arc(W / 2, H / 2, r, 0, Math.PI * 2);
+  g.stroke();
+}
+
+function shake(camera, amount) {
+  if (amount <= 0) return;
+  camera.rotateX((Math.random() - 0.5) * amount);
+  camera.rotateY((Math.random() - 0.5) * amount);
+}
+
+// ─────────────────────────────── 十糎砲 ───────────────────────────────
+export class GunStation {
+  constructor(game, car, gun, label) {
+    this.type = 'gun';
+    this.game = game;
+    this.car = car;
+    this.gun = gun;
+    this.label = label;
+    this.w = WEAPONS.type14;
+    this.yaw = 0;
+    this.elev = 1 * DEG;
+    this.drum = 0;
+    this.shellIdx = 1;
+    this.loaded = null;
+    this.reload = 0;
+    this.ammo = { ...this.w.stock };
+    this.rounds = 0;
+    this.zoom = false;
+    this.recoilT = 1;
+    this.shake = 0;
+  }
+
+  get shell() {
+    return this.w.shells[this.shellIdx];
+  }
+
+  tableShell() {
+    const id = this.loaded ?? this.shell.id;
+    return this.w.tables[id];
+  }
+
+  enter() {}
+  exit() {
+    this.reload = 0;
+  }
+
+  update(dt, input, active) {
+    const g = this.game;
+    if (active) {
+      const w = this.w;
+      const sens = this.zoom ? 0.00006 : 0.00016;
+      const fine = input.down('ShiftLeft') ? 0.25 : 1;
+      let dyaw = -input.mouseDX * sens * 6;
+      let delev = -input.mouseDY * sens * 6;
+      if (input.down('ArrowLeft')) dyaw += w.traverseRate * dt * fine;
+      if (input.down('ArrowRight')) dyaw -= w.traverseRate * dt * fine;
+      if (input.down('ArrowUp')) delev += w.elevRate * dt * fine;
+      if (input.down('ArrowDown')) delev -= w.elevRate * dt * fine;
+      this.yaw = wrapAngle(this.yaw + clamp(dyaw, -w.traverseRate * dt, w.traverseRate * dt));
+      this.elev = clamp(this.elev + clamp(delev, -w.elevRate * dt, w.elevRate * dt), w.elevMin, w.elevMax);
+
+      if (input.wheel) this.drum = clamp(this.drum - input.wheel * (input.down('ShiftLeft') ? 10 : 1), 0, 1500);
+      if (input.hit('PageUp')) this.drum = clamp(this.drum + 10, 0, 1500);
+      if (input.hit('PageDown')) this.drum = clamp(this.drum - 10, 0, 1500);
+      if (input.hit('Digit1')) this.selectShell(0);
+      if (input.hit('Digit2')) this.selectShell(1);
+      if (input.hit('BracketLeft')) g.targetBook.cycle(-1);
+      if (input.hit('BracketRight')) g.targetBook.cycle(1);
+
+      if (g.settings.assist) {
+        const entry = g.targetBook.selected();
+        if (entry) this.drum = Math.round(lookupElevation(this.tableShell(), entry.range) * 10) / 10;
+      }
+
+      if (!this.loaded && input.down('KeyR')) {
+        if (this.ammo[this.shell.id] > 0) {
+          if (this.reload === 0) g.audio.play('clank', this.gun.sight.getWorldPosition(_v), 0.8);
+          this.reload += dt / w.reloadTime;
+          if (this.reload >= 1) {
+            this.loaded = this.shell.id;
+            this.ammo[this.shell.id]--;
+            this.reload = 0;
+            g.audio.play('clank', this.gun.sight.getWorldPosition(_v), 1.2);
+            g.message(`${this.shell.name}裝填完畢`);
+          }
+        } else if (input.hit('KeyR')) {
+          g.message(`${this.shell.name}已用罄`, 'alert');
+        }
+      } else if (!input.down('KeyR')) {
+        this.reload = 0;
+      }
+
+      if (input.btnHit(0)) this.fire();
+      if (input.btnHit(2)) this.zoom = !this.zoom;
+    }
+
+    this.recoilT = Math.min(1, this.recoilT + dt / 1.4);
+    const k = this.recoilT;
+    this.gun.recoil.position.x = k < 0.08 ? -0.9 * (k / 0.08) : -0.9 * (1 - (k - 0.08) / 0.92) ** 2;
+    this.gun.turret.rotation.y = this.yaw;
+    this.gun.elev.rotation.z = this.elev;
+    this.shake = Math.max(0, this.shake - dt * 0.15);
+  }
+
+  selectShell(i) {
+    this.shellIdx = i;
+    this.game.message(`選用彈種：${this.shell.name}${this.loaded ? '（下一發）' : ''}`);
+  }
+
+  fire() {
+    const g = this.game;
+    if (!this.loaded) {
+      g.message('未裝填（按住 R 裝填）', 'alert');
+      return;
+    }
+    const muzzle = this.gun.muzzle.getWorldPosition(new THREE.Vector3());
+    this.gun.elev.getWorldQuaternion(_q);
+    const dir = X_AXIS.clone().applyQuaternion(_q);
+    const blocker = g.train.rayBlocked(muzzle, dir, this.car);
+    if (blocker) {
+      g.message(`射界受阻：${blocker.name}在射線上`, 'alert');
+      return;
+    }
+    const shell = this.w.shells.find((s) => s.id === this.loaded);
+    // 散布
+    const up = new THREE.Vector3(0, 1, 0).applyQuaternion(_q);
+    const side = new THREE.Vector3().crossVectors(dir, up);
+    dir.addScaledVector(up, fromMil(gaussian() * this.w.dispersionMil));
+    dir.addScaledVector(side, fromMil(gaussian() * this.w.dispersionMil)).normalize();
+    const v0 = shell.v0 * (1 - this.w.wearPerRound * this.rounds);
+    const vel = dir.clone().multiplyScalar(v0).add(g.train.velocity(_d));
+    g.projectiles.spawn({ pos: muzzle, vel, k: this.w.C * shell.form, kind: 'shell', shell, weapon: this.w, source: this });
+    g.effects.muzzleFlash(muzzle, dir, 2.2);
+    g.audio.play('cannon', muzzle, 1);
+    g.stats.shots++;
+    this.rounds++;
+    this.loaded = null;
+    this.recoilT = 0;
+    this.shake = 0.03;
+  }
+
+  applyCamera(camera) {
+    this.gun.sight.getWorldPosition(camera.position);
+    this.gun.turret.getWorldQuaternion(_q2);
+    _e.set(this.elev - fromMil(this.drum), -Math.PI / 2, 0, 'YXZ');
+    camera.quaternion.copy(_q2).multiply(_q.setFromEuler(_e));
+    camera.fov = this.zoom ? 5 : 13;
+    shake(camera, this.shake);
+  }
+
+  azimuthMil() {
+    this.gun.elev.getWorldQuaternion(_q);
+    _d.copy(X_AXIS).applyQuaternion(_q);
+    return bearingMil(_d.x, _d.z);
+  }
+
+  drawOverlay(g, W, H, camera) {
+    const r = Math.min(W, H) * 0.46;
+    scopeMask(g, W, H, r);
+    const cx = W / 2;
+    const cy = H / 2;
+    const ppm = pxPerMil(camera, H);
+    g.strokeStyle = 'rgba(15,15,10,0.95)';
+    g.fillStyle = 'rgba(15,15,10,0.95)';
+    g.lineWidth = 1.5;
+    g.font = '12px sans-serif';
+    g.textAlign = 'center';
+    // 主十字與分劃（每 5 密位一小刻、10 密位一大刻）
+    g.beginPath();
+    g.moveTo(cx - r, cy);
+    g.lineTo(cx - 6, cy);
+    g.moveTo(cx + 6, cy);
+    g.lineTo(cx + r, cy);
+    g.moveTo(cx, cy + 6);
+    g.lineTo(cx, cy + r);
+    g.stroke();
+    for (let m = 5; m * ppm < r; m += 5) {
+      const big = m % 10 === 0;
+      const len = big ? 10 : 5;
+      for (const s of [-1, 1]) {
+        g.beginPath();
+        g.moveTo(cx + s * m * ppm, cy - len);
+        g.lineTo(cx + s * m * ppm, cy);
+        g.stroke();
+        if (big && m % 20 === 0 && m * ppm > 22) g.fillText(String(m), cx + s * m * ppm, cy - 14);
+      }
+      if (m % 10 === 0) {
+        g.beginPath();
+        g.moveTo(cx - 5, cy + m * ppm);
+        g.lineTo(cx + 5, cy + m * ppm);
+        g.stroke();
+      }
+    }
+    // 上方倒 V 瞄準點
+    g.beginPath();
+    g.moveTo(cx - 8, cy - 14);
+    g.lineTo(cx, cy - 2);
+    g.lineTo(cx + 8, cy - 14);
+    g.stroke();
+  }
+
+  hud() {
+    const g = this.game;
+    const entry = g.targetBook.selected();
+    const reloadBar = this.loaded
+      ? `<span class="ok">已裝填：${this.w.shells.find((s) => s.id === this.loaded).name}</span>`
+      : this.reload > 0
+        ? `裝填中 <div class="bar"><i style="width:${(this.reload * 100).toFixed(0)}%"></i></div>`
+        : '<span class="warn">未裝填</span>　按住 <b>R</b>';
+    const sug = entry ? lookupElevation(this.tableShell(), entry.range).toFixed(1) : null;
+    return `
+      <div class="acc">${this.label}</div>
+      <div><span class="k">方位角</span> ${fmtMil(this.azimuthMil())}　<span class="k">射角</span> ${toMil(this.elev).toFixed(1)} 密位</div>
+      <div><span class="k">表尺</span> <b>${this.drum.toFixed(1)}</b> 密位${g.settings.assist ? '　<span class="ok">輔助</span>' : ''}</div>
+      <div><span class="k">彈種</span> ${this.shell.name}　<span class="k">尖鋭弾</span> ${this.ammo.AP}　<span class="k">榴弾</span> ${this.ammo.HE}</div>
+      <div>${reloadBar}</div>
+      <div><span class="k">目標簿</span> ${entry ? `${entry.id} 方位 ${fmtMil(entry.bearing)}・${entry.range} m（${entry.method}）${g.settings.assist ? '' : `<span class="k">　射表約 ${sug}</span>`}` : '—'}</div>
+      <div class="k">滑鼠：方向／俯仰　滾輪：表尺　1/2：彈種　右鍵：倍率　[ ]：選目標　E：離開</div>`;
+  }
+}
+
+// ─────────────────────────────── 九二式重機槍 ───────────────────────────────
+export class MgStation {
+  constructor(game, car, mg, pool) {
+    this.type = 'mg';
+    this.game = game;
+    this.car = car;
+    this.mg = mg;
+    this.label = mg.label;
+    this.pool = pool;
+    this.w = WEAPONS.type92;
+    this.yaw = 0;
+    this.pitch = 0;
+    this.strip = this.w.stripSize;
+    this.reload = 0;
+    this.heat = 0;
+    this.overheat = false;
+    this.cool = 0;
+    this.zoom = false;
+  }
+
+  enter() {}
+  exit() {
+    this.reload = 0;
+  }
+
+  update(dt, input, active) {
+    const g = this.game;
+    const w = this.w;
+    this.cool = Math.max(0, this.cool - dt);
+    this.heat = Math.max(0, this.heat - dt * 5);
+    if (this.overheat && this.heat < 45) {
+      this.overheat = false;
+      g.message('槍管已冷卻');
+    }
+    if (active) {
+      const sens = this.zoom ? 0.0009 : 0.0018;
+      const dyaw = clamp(-input.mouseDX * sens, -w.traverseRate * dt, w.traverseRate * dt);
+      const dp = clamp(-input.mouseDY * sens, -w.elevRate * dt, w.elevRate * dt);
+      this.yaw = clamp(this.yaw + dyaw, -this.mg.arc, this.mg.arc);
+      this.pitch = clamp(this.pitch + dp, w.elevMin, w.elevMax);
+      if (input.btnHit(2)) this.zoom = !this.zoom;
+
+      if (input.down('KeyR') && this.strip < w.stripSize && this.pool.rounds > 0) {
+        if (this.reload === 0) g.audio.play('clank', this.mg.sight.getWorldPosition(_v), 0.5);
+        this.reload += dt / w.reloadTime;
+        if (this.reload >= 1) {
+          const need = Math.min(w.stripSize, this.pool.rounds + this.strip) - this.strip;
+          this.pool.rounds -= need;
+          this.strip += need;
+          this.reload = 0;
+        }
+      } else {
+        this.reload = 0;
+      }
+
+      if (input.btn(0) && this.cool <= 0) {
+        if (this.overheat) {
+          if (input.btnHit(0)) g.message('槍管過熱！', 'alert');
+        } else if (this.strip <= 0) {
+          if (input.btnHit(0)) g.audio.play('click', this.mg.sight.getWorldPosition(_v));
+        } else {
+          this.shoot();
+          this.cool += 60 / w.rpm;
+        }
+      }
+    }
+    this.mg.yawG.rotation.y = this.yaw;
+    this.mg.pitchG.rotation.z = this.pitch;
+  }
+
+  shoot() {
+    const g = this.game;
+    const muzzle = this.mg.muzzle.getWorldPosition(new THREE.Vector3());
+    this.mg.pitchG.getWorldQuaternion(_q);
+    const dir = X_AXIS.clone().applyQuaternion(_q);
+    const blocker = g.train.rayBlocked(muzzle, dir, this.car, 60);
+    if (blocker) {
+      if (this.cool <= 0) g.message(`射界受阻：${blocker.name}`, 'alert');
+      this.cool = 0.5;
+      return;
+    }
+    const spread = this.w.dispersionMil * (1 + this.heat / 60);
+    const up = new THREE.Vector3(0, 1, 0).applyQuaternion(_q);
+    const side = new THREE.Vector3().crossVectors(dir, up);
+    dir.addScaledVector(up, fromMil(gaussian() * spread)).addScaledVector(side, fromMil(gaussian() * spread)).normalize();
+    const shell = this.w.shells[0];
+    const vel = dir.clone().multiplyScalar(shell.v0).add(g.train.velocity(_d));
+    g.projectiles.spawn({ pos: muzzle, vel, k: this.w.C, kind: 'bullet', shell, weapon: this.w, tracer: true, source: this });
+    g.effects.muzzleFlash(muzzle, dir, 0.25);
+    g.audio.play('mg', muzzle, 1);
+    this.strip--;
+    this.heat += 1.15;
+    if (this.heat >= 100) {
+      this.overheat = true;
+      g.message('槍管過熱！停止射擊冷卻', 'alert');
+    }
+  }
+
+  applyCamera(camera) {
+    this.mg.sight.getWorldPosition(camera.position);
+    viewQuat(this.mg.yawG, this.pitch, 0, camera.quaternion);
+    camera.fov = this.zoom ? 22 : 48;
+    if (this.cool > 0 && this.game.input.btn(0) && this.strip > 0) shake(camera, 0.003);
+  }
+
+  drawOverlay(g, W, H) {
+    const cx = W / 2;
+    const cy = H / 2;
+    g.strokeStyle = 'rgba(20,20,15,0.9)';
+    g.lineWidth = 2;
+    g.beginPath();
+    g.arc(cx, cy, 34, 0, Math.PI * 2);
+    g.moveTo(cx - 70, cy);
+    g.lineTo(cx - 34, cy);
+    g.moveTo(cx + 34, cy);
+    g.lineTo(cx + 70, cy);
+    g.moveTo(cx, cy + 34);
+    g.lineTo(cx, cy + 70);
+    g.stroke();
+    g.fillStyle = 'rgba(20,20,15,0.95)';
+    g.beginPath();
+    g.moveTo(cx, cy);
+    g.lineTo(cx - 4, cy + 10);
+    g.lineTo(cx + 4, cy + 10);
+    g.fill();
+  }
+
+  hud() {
+    const heatCls = this.overheat ? 'warn' : this.heat > 70 ? 'acc' : 'k';
+    return `
+      <div class="acc">${this.label}（九二式重機関銃）</div>
+      <div><span class="k">保彈板</span> <b>${this.strip}</b>/${this.w.stripSize}　<span class="k">本車存彈</span> ${this.pool.rounds}</div>
+      ${this.reload > 0 ? `換彈中 <div class="bar"><i style="width:${(this.reload * 100).toFixed(0)}%"></i></div>` : ''}
+      <div><span class="${heatCls}">槍管溫度 ${Math.round(this.heat)}%${this.overheat ? '（過熱）' : ''}</span></div>
+      <div class="k">左鍵：射擊　按住 R：換保彈板　右鍵：倍率　E：離開</div>`;
+  }
+}
+
+// ─────────────────────────────── 指揮台 ───────────────────────────────
+export class ConsoleStation {
+  constructor(game, car, ref) {
+    this.type = 'console';
+    this.game = game;
+    this.car = car;
+    this.anchor = ref.anchor;
+    this.label = '指揮車 指揮台';
+    this.yaw = 0;
+    this.pitch = 0;
+    this.zoom = false;
+  }
+
+  enter() {}
+  exit() {}
+
+  view(out) {
+    return viewQuat(this.car.group, this.pitch, this.yaw, out);
+  }
+
+  update(dt, input, active) {
+    if (!active) return;
+    const g = this.game;
+    const sens = this.zoom ? 0.00025 : 0.0022;
+    this.yaw -= input.mouseDX * sens;
+    this.pitch = clamp(this.pitch - input.mouseDY * sens, -0.6, 0.6);
+    if (input.btnHit(2)) this.zoom = !this.zoom;
+    if (input.hit('KeyW') || input.hit('ArrowUp')) g.train.order(g.train.ordered + 1);
+    if (input.hit('KeyS') || input.hit('ArrowDown')) g.train.order(g.train.ordered - 1);
+    if (input.btnHit(0) && this.zoom) this.mark();
+  }
+
+  // 觀測鏡只能精確標方位，距離為目測估計（誤差約 ±12%）
+  mark() {
+    const g = this.game;
+    const origin = this.anchor.getWorldPosition(new THREE.Vector3());
+    const dir = new THREE.Vector3(0, 0, -1).applyQuaternion(this.view(new THREE.Quaternion()));
+    const hit = g.pick(origin, dir);
+    if (!hit) {
+      g.message('觀測鏡：無法判定（天空或超出視界）', 'alert');
+      return;
+    }
+    const est = clamp(hit.dist * (1 + gaussian() * 0.12), hit.dist * 0.75, hit.dist * 1.25);
+    const e = g.targetBook.add({ bearing: bearingMil(dir.x, dir.z), range: Math.round(est / 50) * 50, method: '目測' });
+    g.message(`目標簿 ${e.id}：方位 ${fmtMil(e.bearing)}，目測距離約 ${e.range} m`);
+  }
+
+  applyCamera(camera) {
+    this.anchor.getWorldPosition(camera.position);
+    this.view(camera.quaternion);
+    camera.fov = this.zoom ? 8.5 : 68;
+  }
+
+  drawOverlay(g, W, H, camera) {
+    const cx = W / 2;
+    const cy = H / 2;
+    if (this.zoom) {
+      // 雙眼望遠鏡遮罩
+      const r = Math.min(W, H) * 0.36;
+      g.save();
+      g.fillStyle = 'rgba(0,0,0,0.93)';
+      g.beginPath();
+      g.rect(0, 0, W, H);
+      g.arc(cx - r * 0.62, cy, r, 0, Math.PI * 2, true);
+      g.arc(cx + r * 0.62, cy, r, 0, Math.PI * 2, true);
+      g.fill('evenodd');
+      g.restore();
+      const ppm = pxPerMil(camera, H);
+      g.strokeStyle = 'rgba(10,10,8,0.9)';
+      g.fillStyle = 'rgba(10,10,8,0.9)';
+      g.lineWidth = 1.2;
+      g.font = '11px sans-serif';
+      g.textAlign = 'center';
+      g.beginPath();
+      g.moveTo(cx - 100 * ppm, cy);
+      g.lineTo(cx + 100 * ppm, cy);
+      for (let m = -100; m <= 100; m += 10) {
+        const l = m % 50 === 0 ? 9 : 5;
+        g.moveTo(cx + m * ppm, cy - l);
+        g.lineTo(cx + m * ppm, cy + l);
+      }
+      g.stroke();
+    }
+    // 方位刻度帶
+    const dir = _d.set(0, 0, -1).applyQuaternion(camera.quaternion);
+    const b = bearingMil(dir.x, dir.z);
+    g.fillStyle = 'rgba(18,20,14,0.75)';
+    g.fillRect(cx - 160, 10, 320, 30);
+    g.fillStyle = '#e8e3cf';
+    g.font = '14px sans-serif';
+    g.textAlign = 'center';
+    g.fillText(`方位 ${fmtMil(b)} 密位`, cx, 31);
+
+    // 傳令鐘
+    const t = this.game.train;
+    const bw = 360;
+    const bx = cx - bw / 2;
+    const by = H - 70;
+    g.fillStyle = 'rgba(18,20,14,0.8)';
+    g.fillRect(bx, by, bw, 52);
+    NOTCHES.forEach((n, i) => {
+      const x = bx + 12 + i * ((bw - 24) / NOTCHES.length);
+      const wcell = (bw - 24) / NOTCHES.length - 6;
+      const ordered = i === t.ordered;
+      const ack = i === t.acknowledged;
+      g.fillStyle = ack ? '#e0b25a' : ordered ? 'rgba(224,178,90,0.35)' : 'rgba(255,255,255,0.08)';
+      g.fillRect(x, by + 8, wcell, 26);
+      g.fillStyle = ack ? '#1b1d15' : '#e8e3cf';
+      g.font = '14px sans-serif';
+      g.fillText(n.name, x + wcell / 2, by + 26);
+    });
+    g.fillStyle = '#a9a48f';
+    g.font = '11px sans-serif';
+    g.fillText(t.pending ? `傳令中… → ${NOTCHES[t.pending.notch].name}` : '司機已確認', cx, by + 47);
+  }
+
+  hud() {
+    const t = this.game.train;
+    return `
+      <div class="acc">指揮車 指揮台</div>
+      <div><span class="k">傳令鐘</span> ${NOTCHES[t.ordered].name}${t.pending ? '（傳令中）' : ''}　<span class="k">速度</span> ${(t.speed * 3.6).toFixed(0)} km/h</div>
+      <div class="k">W/S：傳令鐘加減速　右鍵：觀測鏡　左鍵（觀測鏡中）：標記方位、目測距離　E：離開</div>`;
+  }
+}
+
+// ─────────────────────────────── 測距儀 ───────────────────────────────
+export class RangefinderStation {
+  constructor(game, car, ref) {
+    this.type = 'rangefinder';
+    this.game = game;
+    this.car = car;
+    this.yawG = ref.yawG;
+    this.anchor = ref.anchor;
+    this.label = '火砲車丙 測距儀';
+    this.yaw = Math.PI / 2;
+    this.pitch = 0;
+    this.zoom = true;
+    this.reading = null;
+  }
+
+  enter() {}
+  exit() {}
+
+  view(out) {
+    return viewQuat(this.car.group, this.pitch, this.yaw, out);
+  }
+
+  update(dt, input, active) {
+    this.yawG.rotation.y = this.yaw;
+    if (this.reading) this.reading.t -= dt;
+    if (!active) return;
+    const sens = this.zoom ? 0.00009 : 0.0018;
+    this.yaw -= input.mouseDX * sens;
+    this.pitch = clamp(this.pitch - input.mouseDY * sens, -0.2, 0.35);
+    if (input.btnHit(2)) this.zoom = !this.zoom;
+    if (input.btnHit(0)) this.measure();
+  }
+
+  // 合像式測距：誤差隨距離平方增加
+  measure() {
+    const g = this.game;
+    const origin = this.anchor.getWorldPosition(new THREE.Vector3());
+    const dir = new THREE.Vector3(0, 0, -1).applyQuaternion(this.view(new THREE.Quaternion()));
+    const hit = g.pick(origin, dir);
+    if (!hit) {
+      this.reading = { text: '— 無法測距 —', t: 4 };
+      return;
+    }
+    const sigma = 1.5 + 1.0e-6 * hit.dist * hit.dist;
+    const r = Math.max(10, Math.round((hit.dist + gaussian() * sigma) / 5) * 5);
+    const e = g.targetBook.add({ bearing: bearingMil(dir.x, dir.z), range: r, method: '測距' });
+    this.reading = { text: `${r.toLocaleString()} m`, t: 6 };
+    g.audio.play('click', origin, 2);
+    g.message(`目標簿 ${e.id}：方位 ${fmtMil(e.bearing)}，測距 ${r} m`);
+  }
+
+  applyCamera(camera) {
+    this.anchor.getWorldPosition(camera.position);
+    this.view(camera.quaternion);
+    camera.fov = this.zoom ? 3.2 : 40;
+  }
+
+  drawOverlay(g, W, H, camera) {
+    const cx = W / 2;
+    const cy = H / 2;
+    const rw = Math.min(W * 0.8, 900);
+    const rh = Math.min(H * 0.42, 300);
+    g.save();
+    g.fillStyle = 'rgba(0,0,0,0.93)';
+    g.beginPath();
+    g.rect(0, 0, W, H);
+    g.ellipse(cx, cy, rw / 2, rh / 2, 0, 0, Math.PI * 2, true);
+    g.fill('evenodd');
+    g.restore();
+    g.strokeStyle = 'rgba(10,10,8,0.85)';
+    g.lineWidth = 1.2;
+    g.beginPath();
+    g.moveTo(cx - rw / 2, cy);
+    g.lineTo(cx - 10, cy);
+    g.moveTo(cx + 10, cy);
+    g.lineTo(cx + rw / 2, cy);
+    g.moveTo(cx, cy - 22);
+    g.lineTo(cx, cy - 6);
+    g.moveTo(cx, cy + 6);
+    g.lineTo(cx, cy + 22);
+    g.stroke();
+    const dir = _d.set(0, 0, -1).applyQuaternion(camera.quaternion);
+    g.fillStyle = '#e8e3cf';
+    g.font = '15px sans-serif';
+    g.textAlign = 'center';
+    g.fillText(`方位 ${fmtMil(bearingMil(dir.x, dir.z))}`, cx, cy + rh / 2 + 26);
+    if (this.reading && this.reading.t > 0) {
+      g.fillStyle = '#e0b25a';
+      g.font = 'bold 22px sans-serif';
+      g.fillText(this.reading.text, cx, cy - rh / 2 - 14);
+    }
+  }
+
+  hud() {
+    return `
+      <div class="acc">火砲車丙 測距儀</div>
+      <div class="k">滑鼠：轉向　左鍵：測距並記入目標簿　右鍵：倍率　E：離開</div>`;
+  }
+}
+
+// ─────────────────────────────── 目標簿 ───────────────────────────────
+export class TargetBook {
+  constructor(game) {
+    this.game = game;
+    this.entries = [];
+    this.sel = -1;
+    this.next = 1;
+  }
+
+  add({ bearing, range, method }) {
+    const e = { id: `T${this.next++}`, bearing, range, method, time: this.game.time };
+    this.entries.push(e);
+    if (this.entries.length > 12) this.entries.shift();
+    this.sel = this.entries.length - 1;
+    return e;
+  }
+
+  selected() {
+    return this.entries[this.sel] ?? null;
+  }
+
+  cycle(d) {
+    if (!this.entries.length) return;
+    this.sel = (this.sel + d + this.entries.length) % this.entries.length;
+    const e = this.selected();
+    this.game.message(`選定目標 ${e.id}：方位 ${fmtMil(e.bearing)}，${e.range} m`);
+  }
+}
