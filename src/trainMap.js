@@ -28,7 +28,7 @@ export class TrainMap {
     return CY + (lat / 3.1) * CAR_H;
   }
 
-  draw({ player, station, autoTarget, mode }) {
+  draw({ player, station, autoTarget, mode, highlight }) {
     const g = this.g;
     const t = this.train;
     g.clearRect(0, 0, W, H);
@@ -64,6 +64,15 @@ export class TrainMap {
       } else {
         roundRect(g, x0, CY - CAR_H / 2, w, CAR_H, 3);
         g.fill();
+      }
+      if (highlight === i && !current) {
+        // 教學要前往的車廂：藍色閃爍外框
+        const a = 0.45 + 0.45 * Math.sin(performance.now() / 180);
+        g.strokeStyle = `rgba(127, 182, 224, ${a.toFixed(2)})`;
+        g.lineWidth = 2.5;
+        roundRect(g, x0 - 3, CY - CAR_H / 2 - 3, w + 6, CAR_H + 6, 5);
+        g.stroke();
+        g.lineWidth = 1;
       }
       if (current || target) {
         g.strokeStyle = current ? '#e0b25a' : '#8fd27a';

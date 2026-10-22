@@ -114,18 +114,19 @@ export function helpHtml() {
 
 export function briefingHtml() {
   return `
-  <h2>電報：試驗運行命令</h2>
+  <h2>電報：第一關　試驗運行</h2>
   <div>第一裝甲列車隊 指揮官 收</div>
-  <div>本日於試驗線（全長 3.2 km）實施九四式裝甲列車試驗射擊。列車目前停於起點站，<b>全車僅貴官一員</b>，各崗位須親自操作。</div>
-  <h3>試驗項目</h3>
-  <div>① 至<b>指揮車</b>以傳令鐘發車，微速或半速前進</div>
-  <div>② <b>機槍</b>射擊：起點附近南北兩側 100–400 m 靶板</div>
-  <div>③ 至<b>火砲車丙測距儀</b>測距，再至<b>火砲車甲或乙</b>以十糎砲射擊北側中、遠距靶（1–5 km）及土嚢陣地</div>
-  <div>④ 南側約 1.6 km 道路上有<b>移動靶車</b>往返，須計算提前量</div>
+  <div>本日於試驗線（全長 3.2 km）實施九四式裝甲列車試驗運行。列車目前停於起點站，<b>全車僅貴官一員</b>，各崗位須親自操作。</div>
+  <h3>教學內容（7 章、約 55 個步驟）</h3>
+  <div>① 在車廂裡移動　② 指揮台與發車　③ 九二式重機槍　④ 測距與目標簿</div>
+  <div>⑤ 十糎砲射擊　⑥ 車頂與其他功能　⑦ 結業射擊：擊毀移動靶車</div>
+  <div class="note">左側面板會逐步告訴你要按哪個鍵、走到哪裡、做什麼；黃色箭頭標出要前往的位置。卡住時按 N 可略過該步驟。</div>
   <h3>氣象</h3>
-  <div>氣溫 15°C、無風（標準條件）</div>
-  <div class="note">按 H 查看完整操作說明。本原型（M1）尚無敵軍，射擊成績顯示於右上角。</div>
-  <div style="text-align:center"><button class="start-btn" id="start-btn">開始</button></div>`;
+  <div>氣溫 15°C、無風（標準條件）。本關沒有敵軍。</div>
+  <div class="brief-btns">
+    <button class="start-btn" id="start-btn">開始教學</button>
+    <button class="start-btn secondary" id="free-btn">略過教學，自由練習</button>
+  </div>`;
 }
 
 export function firingTableHtml(weapon, shellId) {

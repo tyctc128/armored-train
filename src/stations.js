@@ -113,6 +113,7 @@ export class GunStation {
           this.reload += dt / w.reloadTime;
           if (this.reload >= 1) {
             this.loaded = this.shell.id;
+            g.emit('reloaded', { station: this, shell: this.shell.id });
             this.ammo[this.shell.id]--;
             this.reload = 0;
             g.audio.play('clank', this.gun.sight.getWorldPosition(_v), 1.2);
@@ -126,7 +127,10 @@ export class GunStation {
       }
 
       if (input.btnHit(0)) this.fire();
-      if (input.btnHit(2)) this.zoom = !this.zoom;
+      if (input.btnHit(2)) {
+        this.zoom = !this.zoom;
+        this.game.emit('zoom', { station: this, zoom: this.zoom });
+      }
     }
 
     this.recoilT = Math.min(1, this.recoilT + dt / 1.4);
@@ -139,6 +143,7 @@ export class GunStation {
 
   selectShell(i) {
     this.shellIdx = i;
+    this.game.emit('shellSelect', { station: this, shell: this.shell.id });
     this.game.message(`選用彈種：${this.shell.name}${this.loaded ? '（下一發）' : ''}`);
   }
 
@@ -165,6 +170,7 @@ export class GunStation {
     const v0 = shell.v0 * (1 - this.w.wearPerRound * this.rounds);
     const vel = dir.clone().multiplyScalar(v0).add(g.train.velocity(_d));
     g.projectiles.spawn({ pos: muzzle, vel, k: this.w.C * shell.form, kind: 'shell', shell, weapon: this.w, source: this });
+    g.emit('gunFire', { station: this, shell: shell.id });
     g.effects.muzzleFlash(muzzle, dir, 2.2);
     g.audio.play('cannon', muzzle, 1);
     g.stats.shots++;
@@ -294,7 +300,10 @@ export class MgStation {
       const dp = clamp(-input.mouseDY * sens, -w.elevRate * dt, w.elevRate * dt);
       this.yaw = clamp(this.yaw + dyaw, -this.mg.arc, this.mg.arc);
       this.pitch = clamp(this.pitch + dp, w.elevMin, w.elevMax);
-      if (input.btnHit(2)) this.zoom = !this.zoom;
+      if (input.btnHit(2)) {
+        this.zoom = !this.zoom;
+        this.game.emit('zoom', { station: this, zoom: this.zoom });
+      }
 
       if (input.down('KeyR') && this.strip < w.stripSize && this.pool.rounds > 0) {
         if (this.reload === 0) g.audio.play('clank', this.mg.sight.getWorldPosition(_v), 0.5);
@@ -303,6 +312,7 @@ export class MgStation {
           const need = Math.min(w.stripSize, this.pool.rounds + this.strip) - this.strip;
           this.pool.rounds -= need;
           this.strip += need;
+          g.emit('mgReload', { station: this });
           this.reload = 0;
         }
       } else {
@@ -342,6 +352,7 @@ export class MgStation {
     const shell = this.w.shells[0];
     const vel = dir.clone().multiplyScalar(shell.v0).add(g.train.velocity(_d));
     g.projectiles.spawn({ pos: muzzle, vel, k: this.w.C, kind: 'bullet', shell, weapon: this.w, tracer: true, source: this });
+    g.emit('mgShot', { station: this });
     g.effects.muzzleFlash(muzzle, dir, 0.25);
     g.audio.play('mg', muzzle, 1);
     this.strip--;
@@ -418,7 +429,10 @@ export class ConsoleStation {
     const sens = this.zoom ? 0.00025 : 0.0022;
     this.yaw -= input.mouseDX * sens;
     this.pitch = clamp(this.pitch - input.mouseDY * sens, -0.6, 0.6);
-    if (input.btnHit(2)) this.zoom = !this.zoom;
+    if (input.btnHit(2)) {
+        this.zoom = !this.zoom;
+        this.game.emit('zoom', { station: this, zoom: this.zoom });
+      }
     if (input.hit('KeyW') || input.hit('ArrowUp')) g.train.order(g.train.ordered + 1);
     if (input.hit('KeyS') || input.hit('ArrowDown')) g.train.order(g.train.ordered - 1);
     if (input.btnHit(0) && this.zoom) this.mark();
@@ -436,6 +450,7 @@ export class ConsoleStation {
     }
     const est = clamp(hit.dist * (1 + gaussian() * 0.12), hit.dist * 0.75, hit.dist * 1.25);
     const e = g.targetBook.add({ bearing: bearingMil(dir.x, dir.z), range: Math.round(est / 50) * 50, method: '目測' });
+    g.emit('mark', { entry: e, target: hit.target });
     g.message(`目標簿 ${e.id}：方位 ${fmtMil(e.bearing)}，目測距離約 ${e.range} m`);
   }
 
@@ -546,7 +561,10 @@ export class RangefinderStation {
     const sens = this.zoom ? 0.00009 : 0.0018;
     this.yaw -= input.mouseDX * sens;
     this.pitch = clamp(this.pitch - input.mouseDY * sens, -0.2, 0.35);
-    if (input.btnHit(2)) this.zoom = !this.zoom;
+    if (input.btnHit(2)) {
+        this.zoom = !this.zoom;
+        this.game.emit('zoom', { station: this, zoom: this.zoom });
+      }
     if (input.btnHit(0)) this.measure();
   }
 
@@ -563,6 +581,7 @@ export class RangefinderStation {
     const sigma = 1.5 + 1.0e-6 * hit.dist * hit.dist;
     const r = Math.max(10, Math.round((hit.dist + gaussian() * sigma) / 5) * 5);
     const e = g.targetBook.add({ bearing: bearingMil(dir.x, dir.z), range: r, method: '測距' });
+    g.emit('measure', { entry: e, target: hit.target, dist: hit.dist });
     this.reading = { text: `${r.toLocaleString()} m`, t: 6 };
     g.audio.play('click', origin, 2);
     g.message(`目標簿 ${e.id}：方位 ${fmtMil(e.bearing)}，測距 ${r} m`);

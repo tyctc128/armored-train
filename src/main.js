@@ -12,6 +12,8 @@ import { loadModels } from './train/models.js';
 import { TrainMap } from './trainMap.js';
 import { CarGuide } from './guide/carGuide.js';
 import './guide/guide.css';
+import { Tutorial } from './tutorial/tutorial.js';
+import './tutorial/tutorial.css';
 import { Player } from './player/player.js';
 import { Effects } from './weapons/effects.js';
 import { Projectiles } from './weapons/projectiles.js';
@@ -78,6 +80,7 @@ async function init() {
   const effects = new Effects(scene);
   const mats = createMaterials();
 
+  let tutorial = null;
   const game = {
     time: 0,
     started: false,
@@ -91,6 +94,8 @@ async function init() {
     audio,
     effects,
     message: (text, kind) => ui.message(text, kind),
+    // 遊戲事件（教學關用來判斷步驟是否完成）
+    emit: (type, data) => tutorial?.onEvent(type, data),
   };
 
   const train = new Train(scene, track, mats, {
@@ -123,7 +128,11 @@ async function init() {
     }
     const res = targets.applyImpact(point, p, target);
     if (p.kind === 'shell' && res.hit) game.stats.hits++;
-    for (const t of res.destroyed) game.message(`${t.name}擊毀（${targets.destroyed}/${targets.total}）`);
+    for (const t of res.destroyed) {
+      game.message(`${t.name}擊毀（${targets.destroyed}/${targets.total}）`);
+      game.emit('destroyed', { target: t });
+    }
+    game.emit('impact', { kind: p.kind, hit: res.hit, point });
   });
   projectiles.rhoRatio = airDensityRatio(15);
   game.projectiles = projectiles;
@@ -152,6 +161,25 @@ async function init() {
   game.player = player;
   const trainMap = new TrainMap(document.getElementById('trainmap'), train);
   const guide = new CarGuide(document.getElementById('guide'), train, () => player.where()?.car);
+
+  // 第一關教學
+  tutorial = new Tutorial(
+    {
+      game,
+      train,
+      player,
+      stations,
+      targets,
+      ui,
+      input,
+      defOf: (obj) => train.cars.flatMap((c) => c.stations).find((s) => s.obj === obj),
+      showDebrief: (html) => {
+        ui.openModal('debrief', html);
+        input.unlock();
+      },
+    },
+    scene,
+  );
 
   // ── 彈出視窗與暫停 ──
   const pause = ui.pause;
@@ -204,11 +232,13 @@ async function init() {
       game.tableShell = b.dataset.shell;
       ui.modalBody.innerHTML = firingTableHtml(WEAPONS.type14, game.tableShell);
     }
-    if (b.id === 'start-btn') {
+    if (b.id === 'start-btn' || b.id === 'free-btn') {
       game.started = true;
       audio.init();
       closeModal(true);
+      if (b.id === 'start-btn') tutorial.start();
     }
+    if (b.id === 'debrief-btn') closeModal(true);
   });
   canvas.addEventListener('mousedown', () => {
     if (game.started && !input.locked && !ui.modalName) input.lock();
@@ -372,7 +402,13 @@ async function init() {
     }
     if (game.mode === 'walk' && player.auto) prompt = `自動前往 ${player.auto.index + 1}・${player.auto.name}（WASD 取消）`;
     ui.set(ui.prompt, prompt);
-    trainMap.draw({ player, station: game.mode === 'station' ? game.station : null, autoTarget: player.auto, mode: game.mode });
+    trainMap.draw({
+      player,
+      station: game.mode === 'station' ? game.station : null,
+      autoTarget: player.auto,
+      mode: game.mode,
+      highlight: tutorial.highlightCar(),
+    });
     ui.dot.style.display = game.mode === 'walk' ? 'block' : 'none';
   }
 
@@ -396,6 +432,7 @@ async function init() {
     if (ui.guideOpen) {
       // 圖鑑開啟時遊戲暫停，只繪製圖鑑的 3D 檢視
       guide.update(dt);
+      tutorial.update(0, true);
       input.endFrame();
       return;
     }
@@ -410,6 +447,7 @@ async function init() {
       projectiles.update(dt);
       targets.update(dt);
       effects.update(dt);
+      tutorial.update(dt);
       audio.updateEngine(dt, train.speed, loco.chimney.getWorldPosition(locoPos));
     }
     applyCamera();
@@ -428,7 +466,7 @@ async function init() {
     const steps = (n, dt = 1 / 60) => {
       for (let i = 0; i < n; i++) step(dt);
     };
-    window.__game = { game, camera, renderer, scene, stations, player, train, targets, steps, guide, openGuide, closeGuide };
+    window.__game = { game, camera, renderer, scene, stations, player, train, targets, steps, guide, openGuide, closeGuide, tutorial };
   }
 
   ui.loading.classList.add('hidden');
