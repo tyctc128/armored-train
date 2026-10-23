@@ -42,8 +42,32 @@ export class Terrain {
     return along * (1 - smoothstep(5, 32, dz));
   }
 
+  // 靶場觀測走廊：鐵道南側到靶車道路之間削成低平的窪地（只削高處、更低處保持原樣），
+  // 讓列車上看得到道路上的移動靶車
+  // 走廊權重（0–1）與橫向位置 u（鐵道 0 → 道路 1）
+  rangeWeight(x, z) {
+    const along = smoothstep(ROAD_X0 - 400, ROAD_X0 - 100, x) * (1 - smoothstep(ROAD_X1 + 100, ROAD_X1 + 400, x));
+    if (along <= 0) return { w: 0, u: 0 };
+    const tz = trackZ(clamp(x, TRACK_X0, TRACK_X1));
+    const u = (z - tz) / (roadZ(x) - tz);
+    const across = smoothstep(-0.02, 0.06, u) * (1 - smoothstep(0.96, 1.04, u));
+    return { w: along * across, u };
+  }
+
+  rangeCorridor(x, z, h) {
+    const { w, u } = this.rangeWeight(x, z);
+    if (w <= 0) return h;
+    const rz = roadZ(x);
+    // 中間是固定高度的低地（比整條鐵道與道路都低），兩側緩坡接回鐵道路基與道路
+    const BASIN = 14;
+    const nearTrack = lerp(trackY(clamp(x, TRACK_X0, TRACK_X1)) - 1, BASIN, smoothstep(0.02, 0.12, u));
+    const line = lerp(nearTrack, this.naturalHeight(x, rz) - 0.3, smoothstep(0.86, 0.98, u));
+    return lerp(h, Math.min(h, line), w);
+  }
+
   heightFn(x, z) {
     let h = this.naturalHeight(x, z);
+    h = this.rangeCorridor(x, z, h);
     const rb = this.roadBlend(x, z);
     if (rb > 0) h = lerp(h, this.naturalHeight(x, roadZ(x)) - 0.3, rb);
     const d = distToTrack(x, z);

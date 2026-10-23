@@ -32,6 +32,7 @@ export function buildScenery(scene, terrain) {
     if (density < 0.12) continue;
     if (distToTrack(x, z) < 45) continue;
     if (terrain.roadBlend(x, z) > 0.05) continue;
+    if (terrain.rangeWeight(x, z).w > 0.2) continue; // 靶場平原不種樹，以免擋住靶車
     const y = terrain.heightAt(x, z);
     if (y > 300) continue;
     terrain.normalAt(x, z, nrm);
