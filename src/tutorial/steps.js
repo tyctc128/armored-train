@@ -192,7 +192,7 @@ export function buildSteps(ctx) {
         if (c.ui.modalName === 'table') st.opened = true;
         return st.opened && !c.ui.modalName;
       } },
-    { title: '設定表尺', text: `用 ${K('滾輪')} 調整表尺（${K('Shift')}＋滾輪每格 10 密位、${K('PgUp')}／${K('PgDn')} 也可以），調到射表的數值（誤差 2 密位以內）。`,
+    { title: '設定表尺', text: `用 ${K('滾輪')} 調整表尺（${K('Shift')}＋滾輪每格 10 密位、${K('PgUp')}／${K('PgDn')} 也可以；${K('-')}／${K('=')} 微調 0.1 密位），調到射表的數值（誤差 2 密位以內）。`,
       hint: () => {
         const e = gunB.game.targetBook.selected();
         return e ? `目前 ${gunB.drum.toFixed(1)} 密位` : '';

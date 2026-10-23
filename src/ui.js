@@ -116,7 +116,8 @@ export function helpHtml(train) {
       <h3>十糎砲（火砲車甲、乙）・七糎砲（火砲車丙）</h3>
       <div>滑鼠或方向鍵：方向／俯仰（有最大轉速）</div>
       <div><kbd>1</kbd> 尖鋭弾　<kbd>2</kbd> 榴弾　按住 <kbd>R</kbd> 裝填（十糎約 25 秒、七糎約 5 秒，放開中斷）</div>
-      <div>滾輪／<kbd>PgUp</kbd><kbd>PgDn</kbd> 調表尺；左鍵擊發；右鍵倍率</div>
+      <div>表尺：滾輪 ±1、<kbd>Shift</kbd>＋滾輪或 <kbd>PgUp</kbd><kbd>PgDn</kbd> ±10、<kbd>-</kbd><kbd>=</kbd> 微調 ±0.1 密位</div>
+      <div>十字線直接對準目標（砲管會自動依表尺抬高）；左鍵擊發；右鍵倍率</div>
       <div><kbd>[</kbd><kbd>]</kbd> 切換目標簿選定目標</div>
     </div>
     <div>

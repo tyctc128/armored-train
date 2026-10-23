@@ -150,6 +150,10 @@ export class GunStation {
       if (input.wheel) this.drum = clamp(this.drum - input.wheel * (input.down('ShiftLeft') ? 10 : 1), 0, 1500);
       if (input.hit('PageUp')) this.drum = clamp(this.drum + 10, 0, 1500);
       if (input.hit('PageDown')) this.drum = clamp(this.drum - 10, 0, 1500);
+      // 微調 ±0.1 密位（射表數值有一位小數）
+      if (input.hit('Minus') || input.hit('NumpadSubtract')) this.drum = clamp(this.drum - 0.1, 0, 1500);
+      if (input.hit('Equal') || input.hit('NumpadAdd')) this.drum = clamp(this.drum + 0.1, 0, 1500);
+      this.drum = Math.round(this.drum * 10) / 10;
       if (input.hit('Digit1')) this.selectShell(0);
       if (input.hit('Digit2')) this.selectShell(1);
       if (input.hit('BracketLeft')) g.targetBook.cycle(-1);
@@ -311,7 +315,7 @@ export class GunStation {
       <div><span class="k">彈種</span> ${this.shell.name}　<span class="k">尖鋭弾</span> ${this.ammo.AP}　<span class="k">榴弾</span> ${this.ammo.HE}</div>
       <div>${reloadBar}</div>
       <div><span class="k">目標簿</span> ${entry ? `${entry.id} 方位 ${fmtMil(entry.bearing)}・${entry.range} m（${entry.method}）${g.settings.assist ? '' : `<span class="k">　射表約 ${sug}</span>`}` : '—'}</div>
-      <div class="k">滑鼠：方向／俯仰　滾輪：表尺　1/2：彈種　右鍵：倍率　[ ]：選目標　E：離開</div>`;
+      <div class="k">滑鼠：方向／俯仰　滾輪：表尺 ±1（Shift ±10、- = 微調 ±0.1）　1/2：彈種　右鍵：倍率　[ ]：選目標　E：離開</div>`;
   }
 }
 
