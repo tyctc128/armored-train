@@ -520,6 +520,8 @@ async function init() {
 
   const orbitCenter = new THREE.Vector3();
   function applyCamera() {
+    // 十糎砲瞄準鏡會暫時隱藏自己的砲塔；其他視角都要顯示
+    for (const st of stations) if (st.type === 'gun') st.gun.turret.visible = true;
     if (game.mode === 'third') {
       const c = train.cars[game.orbit.car].group.position;
       orbitCenter.lerp(c, orbitCenter.lengthSq() ? 0.2 : 1);

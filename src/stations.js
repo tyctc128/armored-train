@@ -196,6 +196,8 @@ export class GunStation {
     _e.set(this.elev - fromMil(this.drum), -Math.PI / 2, 0, 'YXZ');
     camera.quaternion.copy(_q2).multiply(_q.setFromEuler(_e));
     camera.fov = this.zoom ? 5 : 13;
+    // 瞄準鏡裝在砲塔內：從鏡中看不到自己的砲塔、防盾與砲管（每幀由 main 的 applyCamera 復原）
+    this.gun.turret.visible = false;
     shake(camera, this.shake);
   }
 
@@ -419,11 +421,11 @@ export class MortarStation {
   }
 
   applyCamera(camera) {
-    // 站在砲後方，視線朝裝定方位
+    // 站在砲的正後方（兩側砲手之間），視線朝裝定方位
     const base = this.ref.node.getWorldPosition(_v);
     const dir = this.dirWorld(_d);
-    camera.position.copy(base).addScaledVector(dir, -1.3);
-    camera.position.y += 1.65;
+    camera.position.copy(base).addScaledVector(dir, -0.35);
+    camera.position.y += 1.75;
     const yaw = Math.atan2(-dir.z, dir.x) + this.lookYaw;
     _e.set(this.lookPitch, yaw - Math.PI / 2, 0, 'YXZ');
     camera.quaternion.setFromEuler(_e);

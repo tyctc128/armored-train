@@ -61,9 +61,9 @@ export class Crew {
               lines: ['七糎砲待命！'] });
           }
         } else if (st.type === 'mortar') {
-          // 敞頂迫砲座的砲組（暴露位置）
-          for (const dz of [-0.75, 0.75]) {
-            this.add(car, { variant: 'soldier', name: nextName('迫砲手'), x: st.x + 0.3, z: dz, yaw: Math.PI, pose: 'stand', exposed: true,
+          // 敞頂迫砲座的砲組（暴露位置）：分站迫砲座兩端，不擋指揮官從砲後方瞄準
+          for (const [dx, dz, yaw] of [[-2.2, -0.95, 0], [0.9, 0.95, Math.PI]]) {
+            this.add(car, { variant: 'soldier', name: nextName('迫砲手'), x: st.x + dx, z: dz, yaw, pose: 'stand', exposed: true,
               lines: ['迫砲待命！'] });
           }
         }
