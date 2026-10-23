@@ -234,19 +234,23 @@ function carWalkable(car, x, lat, level) {
     if (car.loco) {
       // 機關車：前平台 → 右側腳踏板 → 後平台
       if (x > L2 - 0.2 || x < -L2 + 0.2) return al <= DOOR_HALF ? EXPOSED : BLOCKED;
-      if (x > L2 - 1.2 || x < -L2 + 1.15) return al <= 1.75 ? EXPOSED : BLOCKED;
+      if (x > L2 - 0.9 || x < -L2 + 1.15) return al <= 1.75 ? EXPOSED : BLOCKED;
+      if (x > L2 - 1.2) return al <= 1.75 && al >= 0.9 ? EXPOSED : BLOCKED; // 煙室門伸出前平台
       return lat >= 1.45 && lat <= 1.8 ? EXPOSED : BLOCKED;
     }
     if (x > L2 - 0.2) return car.closedFront ? BLOCKED : al <= DOOR_HALF ? SHELTERED : BLOCKED;
     if (x < -L2 + 0.25) return car.closedRear ? BLOCKED : al <= DOOR_HALF ? SHELTERED : BLOCKED;
     if (car.pitX != null && Math.abs(x - car.pitX) < 0.15) return al <= DOOR_HALF ? SHELTERED : BLOCKED;
+    for (const b of car.bulkheads ?? []) if (Math.abs(x - b) < 0.15) return al <= DOOR_HALF ? SHELTERED : BLOCKED;
     if (al > car.innerHalf - 0.3) return BLOCKED;
+    if (car.openTop) return EXPOSED; // 敞頂（炭水車）
     return car.pitX != null && x < car.pitX ? EXPOSED : SHELTERED;
   }
   if (!car.roofWalk) return BLOCKED;
   const [r0, r1] = car.roofRange;
   if (x < r0 + (r0 > -L2 ? 0.15 : 0) || x > r1) return BLOCKED;
   if (al > car.roofHalf - 0.2) return BLOCKED;
+  for (const [b0, b1] of car.roofBlocks ?? []) if (x > b0 - 0.3 && x < b1 + 0.3) return BLOCKED;
   for (const o of car.obstacles) {
     if (Math.hypot(x - o.x, lat - o.z) < o.r + 0.25) return BLOCKED;
   }

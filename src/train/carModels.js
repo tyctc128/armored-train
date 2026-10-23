@@ -292,6 +292,8 @@ function baseCar(name, kind, len) {
     closedRear: false,
     pitX: null,
     topY: 4.4,
+    roofBlocks: [], // 車頂不能走的區段 [x0, x1]（加高的上層車體）
+    bulkheads: [], // 車內隔牆位置（只能從中央的門通過）
   };
 }
 
@@ -319,56 +321,33 @@ function buildGuard(mats) {
   addRunningGear(car.group, mats, len, car.wheels);
   car.closedFront = true;
 
-  const cc = mesh(box(1.3, 0.9, 2.9), mats.armorDark);
-  cc.position.set(len / 2 + 0.45, 0.62, 0);
-  cc.rotation.z = -0.55;
-  car.group.add(cc);
+  // 前端上角兩座圓筒形機槍塔、前端正中探照燈裝甲罩（依照片；尺寸與 tools/blender/guard_car.py 一致）
+  const tx = len / 2 - 0.62;
+  const tz = 0.92;
+  const tr = 0.6;
+  for (const s of [-1, 1]) {
+    const tower = mesh(new THREE.CylinderGeometry(tr, tr, 1.0, 24), mats.armor);
+    tower.position.set(tx, car.roofY + 0.05, s * tz);
+    car.group.add(tower);
+  }
+  const hood = mesh(box(0.32, 0.62, 0.74), mats.armorDark);
+  hood.position.set(len / 2 + 0.16, 2.72, 0);
+  const lens = mesh(new THREE.CircleGeometry(0.15, 18).rotateY(Math.PI / 2), mats.lens, false);
+  lens.position.set(len / 2 + 0.33, 2.72, 0);
+  car.group.add(hood, lens);
 
-  const slBase = mesh(box(0.5, 0.3, 0.5), mats.armorDark);
-  slBase.position.set(len / 2 - 0.7, car.roofY + 0.15, 0);
-  const sl = mesh(new THREE.CylinderGeometry(0.34, 0.3, 0.6, 18).rotateZ(-Math.PI / 2), mats.steel);
-  sl.position.set(len / 2 - 0.7, car.roofY + 0.55, 0);
-  const lens = mesh(new THREE.CircleGeometry(0.29, 18).rotateY(Math.PI / 2), mats.lens, false);
-  lens.position.set(len / 2 - 0.39, car.roofY + 0.55, 0);
-  car.group.add(slBase, sl, lens);
-
+  const mx = tx + Math.cos(35 * DEG) * tr;
+  const mz = tz + Math.sin(35 * DEG) * tr;
   addMgs(car, mats, [
-    { x: len / 2 - 1.4, y: 2.35, z: -w / 2, center: 35 * DEG, arc: 75 * DEG, label: '警戒車 左前機槍', tag: 'FL' },
-    { x: len / 2 - 1.4, y: 2.35, z: w / 2, center: -35 * DEG, arc: 75 * DEG, label: '警戒車 右前機槍', tag: 'FR' },
+    { x: mx, y: 3.52, z: -mz, center: 35 * DEG, arc: 75 * DEG, label: '警戒車 左前機槍', tag: 'FL' },
+    { x: mx, y: 3.52, z: mz, center: -35 * DEG, arc: 75 * DEG, label: '警戒車 右前機槍', tag: 'FR' },
   ]);
   car.hatches = [-1.5];
-  car.obstacles = [{ x: len / 2 - 0.7, z: 0, r: 0.5 }];
-  car.topY = car.roofY + 0.9;
-  return car;
-}
-
-function buildGunCar(mats, high) {
-  const len = 16;
-  const w = 3.1;
-  const name = high ? '火砲車乙' : '火砲車甲';
-  const car = baseCar(name, high ? 'gunB' : 'gunA', len);
-  applyHull(car, makeHull(mats, { len, w, h: 2.3, c: 0.55 }));
-  addRunningGear(car.group, mats, len, car.wheels);
-  const tx = 3.6;
-  let baseY = car.roofY;
-  if (high) {
-    const barbette = mesh(new THREE.CylinderGeometry(1.75, 1.85, 0.8, 28), mats.armor);
-    barbette.position.set(tx, car.roofY + 0.4, 0);
-    car.group.add(barbette);
-    baseY += 0.8;
-  }
-  const gun = makeGunTurret(mats);
-  gun.turret.position.set(tx, baseY, 0);
-  car.group.add(gun.turret);
-  car.gun = gun;
-  car.stations.push({ type: 'gun', x: tx, lat: 0, label: `${name} 十四年式十糎高射砲`, ref: gun });
-  addMgs(car, mats, [
-    { x: -4.6, y: 2.3, z: -w / 2, center: 90 * DEG, arc: 75 * DEG, label: `${name} 左側機槍`, tag: 'L' },
-    { x: -4.6, y: 2.3, z: w / 2, center: -90 * DEG, arc: 75 * DEG, label: `${name} 右側機槍`, tag: 'R' },
-  ]);
-  car.hatches = [-1.6];
-  car.obstacles = [{ x: tx, z: 0, r: 1.85 }];
-  car.topY = baseY + 1.5;
+  car.obstacles = [
+    { x: tx, z: -tz, r: tr },
+    { x: tx, z: tz, r: tr },
+  ];
+  car.topY = car.roofY + 0.55;
   return car;
 }
 
@@ -377,7 +356,8 @@ function buildGunCar(mats, high) {
 function swapToModel(car, model) {
   const g = model.clone(true);
   const need = [];
-  if (car.gun) need.push(...(car.gunNames ? [car.gunNames.turret, car.gunNames.elev] : ['Turret', 'Elev', 'Recoil', 'Muzzle', 'Sight']));
+  if (car.gun) need.push('Turret', 'Elev', 'Recoil', 'Muzzle', 'Sight');
+  if (car.gun2) need.push('Turret2', 'Elev2', 'Recoil2', 'Muzzle2');
   for (const mg of car.mgs) need.push(...['Base', 'Yaw', 'Pitch', 'Muzzle', 'Sight'].map((p) => `MG_${mg.tag}_${p}`));
   if (car.rangefinder) need.push('RF_Yaw', 'RF_Anchor');
   if (car.console) need.push('ConsoleAnchor');
@@ -402,24 +382,11 @@ function swapToModel(car, model) {
     }
     if (o.name.startsWith('Wheelset')) car.wheels.push({ mesh: o, r: o.userData.radius ?? 0.43 });
   });
-  if (car.gun && car.gunNames) {
-    // 補上後座、砲口與瞄準鏡節點（砲身沿搖架 +X）
-    const turret = nodes[car.gunNames.turret];
-    const elev = nodes[car.gunNames.elev];
-    turret.rotation.set(0, 0, 0);
-    elev.rotation.set(0, 0, 0);
-    const recoil = new THREE.Group();
-    for (const c of [...elev.children]) recoil.add(c);
-    elev.add(recoil);
-    const muzzle = new THREE.Object3D();
-    muzzle.position.set(car.gunNames.barrel, 0, 0);
-    recoil.add(muzzle);
-    const sight = new THREE.Object3D();
-    sight.position.set(0.3, elev.position.y + 0.3, -0.62);
-    turret.add(sight);
-    Object.assign(car.gun, { turret, elev, recoil, muzzle, sight });
-  } else if (car.gun) {
+  if (car.gun) {
     Object.assign(car.gun, { turret: nodes.Turret, elev: nodes.Elev, recoil: nodes.Recoil, muzzle: nodes.Muzzle, sight: nodes.Sight });
+  }
+  if (car.gun2) {
+    Object.assign(car.gun2, { turret: nodes.Turret2, elev: nodes.Elev2, recoil: nodes.Recoil2, muzzle: nodes.Muzzle2 });
   }
   for (const mg of car.mgs) {
     const p = (n) => nodes[`MG_${mg.tag}_${n}`];
@@ -431,72 +398,132 @@ function swapToModel(car, model) {
   if (car.mortar) car.mortar.node = g.getObjectByName('Mortar') ?? car.mortar.node;
 }
 
+// 中段加高的上層車體（程式模型：一個箱體）；遊戲只用 roofBlocks／bulkheads 限制走動
+function raisedSection(car, mats, x0, x1, raise) {
+  const box3 = mesh(box(x1 - x0, raise, 3.1 - 1.1), mats.armor);
+  box3.position.set((x0 + x1) / 2, car.roofY + raise / 2, 0);
+  car.group.add(box3);
+  car.roofBlocks.push([x0, x1]);
+  car.bulkheads.push(x0, x1);
+}
+
+// 依照片：甲車中段加高 0.4 m、乙車加高 1.1 m（可越過甲車射擊）；機槍裝在車頂小型機槍塔內
+// （甲：後低段；乙：前低段）。乙車上層車頂後段裝雙像測距儀。尺寸與 tools/blender/gun_car.py 一致。
+function buildGunCar(mats, high) {
+  const len = 16;
+  const w = 3.1;
+  const name = high ? '火砲車乙' : '火砲車甲';
+  const car = baseCar(name, high ? 'gunB' : 'gunA', len);
+  applyHull(car, makeHull(mats, { len, w, h: 2.3, c: 0.55 }));
+  addRunningGear(car.group, mats, len, car.wheels);
+  const tx = 3.6;
+  const raise = high ? 1.1 : 0.4;
+  if (high) raisedSection(car, mats, -len / 2, 5.0, raise);
+  else raisedSection(car, mats, -2.0, 5.6, raise);
+  car.bulkheads = car.bulkheads.filter((b) => Math.abs(b) < len / 2 - 0.1);
+  const baseY = car.roofY + raise;
+  const gun = makeGunTurret(mats);
+  gun.turret.position.set(tx, baseY, 0);
+  car.group.add(gun.turret);
+  car.gun = gun;
+  car.stations.push({ type: 'gun', x: tx, lat: 0, label: `${name} 十四年式十糎高射砲`, ref: gun });
+  const cx = high ? 6.6 : -6.6;
+  for (const z of [-0.8, 0.8]) {
+    const cup = mesh(new THREE.CylinderGeometry(0.55, 0.55, 0.9, 20), mats.armor);
+    cup.position.set(cx, car.roofY + 0.15, z);
+    car.group.add(cup);
+  }
+  addMgs(car, mats, [
+    { x: cx, y: 3.52, z: -1.35, center: 90 * DEG, arc: 75 * DEG, label: `${name} 左側機槍`, tag: 'L' },
+    { x: cx, y: 3.52, z: 1.35, center: -90 * DEG, arc: 75 * DEG, label: `${name} 右側機槍`, tag: 'R' },
+  ]);
+  if (high) {
+    // 雙像測距儀（艦艇用）：上層車頂後段
+    const rx = -5.4;
+    const ry = car.roofY + raise;
+    const ped = mesh(new THREE.CylinderGeometry(0.18, 0.26, 0.6, 12), mats.armorDark);
+    ped.position.set(rx, ry + 0.3, 0);
+    car.group.add(ped);
+    const yawG = new THREE.Group();
+    yawG.position.set(rx, ry + 0.78, 0);
+    car.group.add(yawG);
+    const tube = mesh(new THREE.CylinderGeometry(0.11, 0.11, 2.6, 14).rotateX(Math.PI / 2), mats.steel);
+    yawG.add(tube);
+    for (const z of [-1.3, 1.3]) {
+      const end = mesh(box(0.28, 0.28, 0.2), mats.armorDark);
+      end.position.z = z;
+      yawG.add(end);
+    }
+    const anchor = new THREE.Object3D();
+    anchor.position.set(0, 0.2, 0);
+    yawG.add(anchor);
+    // crewY：測距手坐在車頂操作（照片中的兩名操作手）
+    car.rangefinder = { yawG, anchor, crewY: ry + 0.22 };
+    car.stations.push({ type: 'rangefinder', x: rx, lat: 0, label: '火砲車乙 測距儀', ref: car.rangefinder });
+  }
+  car.hatches = [high ? 5.5 : -3.6];
+  car.obstacles = [
+    { x: tx, z: 0, r: 1.85 },
+    { x: cx, z: -0.8, r: 0.55 },
+    { x: cx, z: 0.8, r: 0.55 },
+    high ? { x: -7.1, z: 0, r: 1.4 } : { x: 7.1, z: 0, r: 0.55 },
+  ];
+  car.topY = baseY + 1.5;
+  return car;
+}
+
+// 火砲車丙：中段加高 0.6 m，上面兩座密閉砲塔各一門八八式七糎砲；遊戲中同一崗位指揮兩座（同步轉向、輪流射擊）。
+// 尺寸與 tools/blender/gun_car_c.py 一致。
 function buildGunCarC(mats) {
   const len = 15.9;
   const car = baseCar('火砲車丙', 'gunC', len);
   applyHull(car, makeHull(mats, { len, w: 3.1, h: 2.3, c: 0.55 }));
   addRunningGear(car.group, mats, len, car.wheels);
-
-  const t = makeGunTurret(mats, { open: true, twin: true, ringR: 1.6, bodyH: 1.0, barrelLen: 3.2, barrelR: 0.065 });
-  t.turret.position.set(-4.2, car.roofY, 0);
-  t.turret.rotation.y = Math.PI;
-  t.elev.rotation.z = 8 * DEG;
-  car.group.add(t.turret);
-  car.gun = t;
-  // Blender 模型只有 Turret7、Turret7_Elev 兩個節點，其餘（Recoil、Muzzle、Sight）換模型後補上
-  car.gunNames = { turret: 'Turret7', elev: 'Turret7_Elev', barrel: 3.5 };
-  car.stations.push({ type: 'gun', weapon: 'type88', x: -4.2, lat: 0, label: '火砲車丙 八八式七糎野戦高射砲', ref: t });
-
-  // 測距儀
-  const rx = 3.6;
-  const ped = mesh(new THREE.CylinderGeometry(0.18, 0.26, 0.6, 12), mats.armorDark);
-  ped.position.set(rx, car.roofY + 0.3, 0);
-  car.group.add(ped);
-  const yawG = new THREE.Group();
-  yawG.position.set(rx, car.roofY + 0.78, 0);
-  car.group.add(yawG);
-  const tube = mesh(new THREE.CylinderGeometry(0.11, 0.11, 2.6, 14).rotateX(Math.PI / 2), mats.steel);
-  yawG.add(tube);
-  for (const z of [-1.3, 1.3]) {
-    const end = mesh(box(0.28, 0.28, 0.2), mats.armorDark);
-    end.position.z = z;
-    yawG.add(end);
-  }
-  const eye = mesh(box(0.25, 0.18, 0.3), mats.armorDark);
-  eye.position.set(-0.22, 0.02, 0);
-  yawG.add(eye);
-  const anchor = new THREE.Object3D();
-  anchor.position.set(0, 0.2, 0);
-  yawG.add(anchor);
-  car.rangefinder = { yawG, anchor };
-  car.stations.push({ type: 'rangefinder', x: rx, lat: 0, label: '火砲車丙 測距儀', ref: car.rangefinder });
-
-  car.hatches = [0.6];
+  const raise = 0.6;
+  raisedSection(car, mats, -5.0, 4.6, raise);
+  const opts = { ringR: 1.25, bodyH: 1.0, barrelLen: 3.5, barrelR: 0.065 };
+  const t1 = makeGunTurret(mats, opts);
+  t1.turret.position.set(2.4, car.roofY + raise, 0);
+  const t2 = makeGunTurret(mats, opts);
+  t2.turret.position.set(-2.6, car.roofY + raise, 0);
+  car.group.add(t1.turret, t2.turret);
+  car.gun = t1;
+  car.gun2 = t2;
+  car.stations.push({ type: 'gun', weapon: 'type88', x: 2.4, lat: 0, label: '火砲車丙 八八式七糎野戦高射砲（兩座連動）', ref: t1, ref2: t2 });
+  const cup = mesh(new THREE.CylinderGeometry(0.5, 0.5, 0.9, 20), mats.armor);
+  cup.position.set(6.9, car.roofY + 0.15, 0);
+  car.group.add(cup);
+  car.hatches = [-6.4];
   car.obstacles = [
-    { x: -4.2, z: 0, r: 1.8 },
-    { x: rx, z: 0, r: 0.45 },
+    { x: 2.4, z: 0, r: 1.5 },
+    { x: -2.6, z: 0, r: 1.5 },
+    { x: 6.9, z: 0, r: 0.5 },
   ];
-  car.topY = car.roofY + 1.3;
+  car.topY = car.roofY + raise + 1.3;
   return car;
 }
 
+// 指揮車（タサ型 60 噸煤車改）：中段加高 1.1 m 成上下兩層，上層車頂有指揮塔、潛望鏡頭與天線，
+// 上層前端兩側有裝甲罩內的側置探照燈；後端低段一座機槍塔。尺寸與 tools/blender/command_car.py 一致。
 function buildCommand(mats) {
   const len = 15;
-  const w = 3.1;
   const car = baseCar('指揮車', 'command', len);
-  applyHull(car, makeHull(mats, { len, w, h: 2.4, c: 0.55 }));
+  applyHull(car, makeHull(mats, { len, w: 3.1, h: 2.4, c: 0.55 }));
   addRunningGear(car.group, mats, len, car.wheels);
+  const raise = 1.1;
+  raisedSection(car, mats, -3.5, 5.0, raise);
+  const hiY = car.roofY + raise;
 
   const cx = 3.2;
   const cup = mesh(new THREE.CylinderGeometry(0.72, 0.8, 0.9, 20), mats.armor);
-  cup.position.set(cx, car.roofY + 0.45, 0);
+  cup.position.set(cx, hiY + 0.45, 0);
   const band = mesh(new THREE.CylinderGeometry(0.81, 0.81, 0.08, 20, 1, true), mats.slit, false);
-  band.position.set(cx, car.roofY + 0.7, 0);
+  band.position.set(cx, hiY + 0.7, 0);
   const dome = mesh(new THREE.SphereGeometry(0.72, 18, 8, 0, Math.PI * 2, 0, Math.PI / 2), mats.armor);
-  dome.position.set(cx, car.roofY + 0.9, 0);
+  dome.position.set(cx, hiY + 0.9, 0);
   car.group.add(cup, band, dome);
   const anchor = new THREE.Object3D();
-  anchor.position.set(cx, car.roofY + 0.7, 0);
+  anchor.position.set(cx, hiY + 0.7, 0);
   car.group.add(anchor);
   car.console = { anchor };
   car.stations.push({ type: 'console', x: cx, lat: 0, label: '指揮車 指揮台（傳令鐘／觀測鏡）', ref: car.console });
@@ -509,29 +536,27 @@ function buildCommand(mats) {
   car.group.add(tPed, tDial);
 
   // 天線
-  const mastGeo = new THREE.CylinderGeometry(0.03, 0.04, 3.2, 6);
-  for (const x of [-5.5, -1.5]) {
+  const masts = [-2.6, 1.2];
+  const mastGeo = new THREE.CylinderGeometry(0.03, 0.04, 2.6, 6);
+  for (const x of masts) {
     const mast = mesh(mastGeo, mats.steel);
-    mast.position.set(x, car.roofY + 1.6, 0);
+    mast.position.set(x, hiY + 1.3, 0);
     car.group.add(mast);
   }
   const wire = new THREE.Line(
-    new THREE.BufferGeometry().setFromPoints([
-      new THREE.Vector3(-5.5, car.roofY + 3.1, 0),
-      new THREE.Vector3(-1.5, car.roofY + 3.1, 0),
-    ]),
+    new THREE.BufferGeometry().setFromPoints(masts.map((x) => new THREE.Vector3(x, hiY + 2.55, 0))),
     new THREE.LineBasicMaterial({ color: 0x222222 }),
   );
   car.group.add(wire);
 
-  addMgs(car, mats, [{ x: -4, y: 2.3, z: -w / 2, center: 90 * DEG, arc: 75 * DEG, label: '指揮車 左側機槍', tag: 'L' }]);
-  car.hatches = [-1.0];
-  car.obstacles = [
-    { x: cx, z: 0, r: 0.9 },
-    { x: -5.5, z: 0, r: 0.15 },
-    { x: -1.5, z: 0, r: 0.15 },
-  ];
-  car.topY = car.roofY + 1.6;
+  // 後端機槍塔（九二式重機槍）
+  const mgCup = mesh(new THREE.CylinderGeometry(0.55, 0.55, 0.9, 20), mats.armor);
+  mgCup.position.set(-6.4, car.roofY + 0.15, -0.75);
+  car.group.add(mgCup);
+  addMgs(car, mats, [{ x: -6.4, y: car.roofY + 0.12, z: -1.3, center: 90 * DEG, arc: 75 * DEG, label: '指揮車 左側機槍', tag: 'L' }]);
+  car.hatches = [-4.4];
+  car.obstacles = [{ x: -6.4, z: -0.75, r: 0.55 }];
+  car.topY = hiY + 1.6;
   return car;
 }
 
@@ -613,18 +638,22 @@ function buildLocomotive(mats) {
   return car;
 }
 
+// 炭水車：敞頂垂直裝甲（車內為暴露區、不能上車頂），左側突出座上的小機槍塔、右側球形槍架。
+// 尺寸與 tools/blender/tender_car.py 一致。
 function buildTender(mats) {
   const len = 10;
   const w = 3.1;
   const car = baseCar('炭水車', 'tender', len);
   applyHull(car, makeHull(mats, { len, w, h: 2.3, c: 0.55 }));
   addRunningGear(car.group, mats, len, car.wheels);
+  car.openTop = true;
+  car.roofWalk = false;
   addMgs(car, mats, [
-    { x: 0.8, y: 2.3, z: -w / 2, center: 90 * DEG, arc: 75 * DEG, label: '炭水車 左側機槍', tag: 'L' },
-    { x: 0.8, y: 2.3, z: w / 2, center: -90 * DEG, arc: 75 * DEG, label: '炭水車 右側機槍', tag: 'R' },
+    { x: 0.5, y: 2.55, z: -(w / 2 + 0.32), center: 90 * DEG, arc: 75 * DEG, label: '炭水車 左側機槍（突出座）', tag: 'L' },
+    { x: 0.5, y: 2.3, z: w / 2, center: -90 * DEG, arc: 75 * DEG, label: '炭水車 右側機槍', tag: 'R' },
   ]);
-  car.hatches = [-2.6];
-  car.topY = car.roofY + 0.3;
+  car.hatches = [];
+  car.topY = car.roofY;
   return car;
 }
 
@@ -671,12 +700,11 @@ function buildPower(mats) {
   car.mortar = { node: mortar };
   car.stations.push({ type: 'mortar', x: -4.0, lat: 0.6, label: '九七式曲射歩兵砲', ref: car.mortar });
 
-  const mastGeo = new THREE.CylinderGeometry(0.03, 0.04, 3.5, 6);
-  for (const x of [x0 - 2.5, x0 + 2.5]) {
-    const mast = mesh(mastGeo, mats.steel);
-    mast.position.set(x, car.roofY + 1.75, 0);
-    car.group.add(mast);
-  }
+  // 人字屋頂：只能沿屋脊走
+  car.roofHalf = 0.6;
+  const lamp = mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.5, 14).rotateZ(Math.PI / 2), mats.steel);
+  lamp.position.set(car.pitX + 0.45, car.roofY + 0.62, 0);
+  car.group.add(lamp);
 
   addMgs(car, mats, [
     { x: -len / 2 + 0.75, y: 2.25, z: -w / 2, center: 135 * DEG, arc: 70 * DEG, label: '電源車 左後機槍', tag: 'RL' },
@@ -684,11 +712,10 @@ function buildPower(mats) {
   ]);
   car.hatches = [len / 2 - 4.2];
   car.obstacles = [
-    { x: x0 - 2.5, z: 0, r: 0.15 },
-    { x: x0 + 2.5, z: 0, r: 0.15 },
+    { x: car.pitX + 0.45, z: 0, r: 0.35 }, // 30 cm 探照燈
     { x: 6.3, z: 0.75, r: 0.2 }, // 發電機排氣管（Blender 模型）
   ];
-  car.topY = car.roofY + 0.3;
+  car.topY = car.roofY + 0.9;
   return car;
 }
 

@@ -146,14 +146,16 @@ class Kit:
                 i += 1
 
     # ── 九二式重機槍球形槍架 ──
-    def mg(self, tag, pos, center_deg, arc_deg, label):
+    def mg(self, tag, pos, center_deg, arc_deg, label, housing=0.42):
+        """housing：球形槍架外罩半徑（車身側牆 0.42；機槍塔上用較小的 0.22）。"""
         k = self
         base = empty(f'MG_{tag}_Base', k.root, pos, yaw=math.radians(center_deg))
         base['center_deg'] = center_deg
         base['arc_deg'] = arc_deg
         base['label'] = label
         hs = MeshBuilder()
-        prof = [(0, 0.42)] + [(0.42 * math.sin(math.radians(a)), 0.42 * math.cos(math.radians(a))) for a in range(15, 91, 15)]
+        R = housing
+        prof = [(0, R)] + [(R * math.sin(math.radians(a)), R * math.cos(math.radians(a))) for a in range(15, 91, 15)]
         hs.lathe((0, 0, 0), (1, 0, 0), prof, 24, 0, cap0=False)
         hs.build(f'MG_{tag}_Housing', [k.M['armor']], parent=base)
         yaw = empty(f'MG_{tag}_Yaw', base)
@@ -181,6 +183,22 @@ class Kit:
         empty(f'MG_{tag}_Sight', pitch, (0.05, 0.31, 0))
         return base
 
+    def interior_shots(self, name, shots, lights_x=(-6.0, -2.0, 2.0, 6.0), light_y=3.0):
+        """車內檢查圖（不輸出模型）：shots＝[(檔名後綴, target, cam_pos, lens)]。
+        存到環境變數 MODEL_SCRATCH 指定的資料夾（預設為系統暫存資料夾）。"""
+        import tempfile
+        import bpy
+        from common import V
+        folder = os.environ.get('MODEL_SCRATCH', tempfile.gettempdir())
+        for x in lights_x:
+            light = bpy.data.lights.new('IL', 'POINT')
+            light.energy = 180
+            ob = bpy.data.objects.new('IL', light)
+            bpy.context.scene.collection.objects.link(ob)
+            ob.location = V(x, light_y, 0)
+        for suffix, target, cam_pos, lens in shots:
+            render_preview(os.path.join(folder, f'{name}_{suffix}.png'), target=target, cam_pos=cam_pos, lens=lens)
+
     def export(self, name, cam_target=(0, 2.4, 0), cam_pos=(-13, 6.5, -14)):
         glb = os.path.join(PROJECT, 'public', 'models', f'{name}.glb')
         export_glb(self.root, glb)
@@ -193,7 +211,12 @@ class Hull:
     """一段空心裝甲車體（x0 為中心）。inside / det / riv 三個 MeshBuilder 累積內裝、外部細節、鉚釘。"""
 
     def __init__(self, kit, length, w=3.1, h=2.3, c=0.55, x0=0.0, front_door=True, rear_door=True,
-                 front_closed_plate=True, name='Hull'):
+                 front_closed_plate=True, name='Hull', front_wall=True, rear_wall=True, gable=False, open_top=False):
+        """front_wall／rear_wall=False：該端不做隔牆（與相鄰較高的車體段相接，由高段的隔牆封住）。
+        gable=True：人字屋頂（c 為屋簷到屋脊的落差）；open_top=True：敞頂垂直側牆（c 不用）。"""
+        self.gable, self.open_top = gable, open_top
+        if open_top:
+            c = 0.0
         self.k = kit
         self.L, self.W, self.H, self.C, self.x0 = length, w, h, c, x0
         self.name = name
@@ -204,11 +227,12 @@ class Hull:
         self.wall_top = Y0 + self.top_in - self.ch_in   # 側牆垂直段上緣
         self.ceil = Y0 + self.top_in
         self.roof_half_in = self.hw_in - self.ch_in
-        self.roof_half = w / 2 - c
+        self.roof_half = 0.0 if gable else w / 2 - c
         self.inside = MeshBuilder()
         self.det = MeshBuilder()
         self.riv = MeshBuilder()
         self._shell()
+        self.walls = (front_wall, rear_wall)
         self._bulkheads(front_door, rear_door)
         ext0 = 0.45 if front_door else 0.0
         ext1 = 0.45 if rear_door else 0.0
@@ -226,6 +250,10 @@ class Hull:
         hw = self.W / 2 - inset
         top = self.H - inset
         ch = self.C - inset * 0.4
+        if self.open_top:
+            return [(-hw, self.H), (-hw, inset), (hw, inset), (hw, self.H)]
+        if self.gable:
+            return [(-hw, inset), (hw, inset), (hw, top - ch), (0, top), (-hw, top - ch)]
         return [(-hw, inset), (hw, inset), (hw, top - ch), (hw - ch, top), (-hw + ch, top), (-hw, top - ch)]
 
     def on_wall(self, side, depth):
@@ -243,7 +271,10 @@ class Hull:
         o0, o1 = ring(self.profile(), self.x_min), ring(self.profile(), self.x_max)
         i0, i1 = ring(self.profile(WALL), self.x_min), ring(self.profile(WALL), self.x_max)
         n = len(o0)
-        for a in range(n):
+        if self.open_top:   # 不封口：兩道牆頂緣
+            for a in (0, n - 1):
+                bm.faces.new([o0[a], i0[a], i1[a], o1[a]] if a else [o0[a], o1[a], i1[a], i0[a]]).material_index = k.A
+        for a in range(n - 1 if self.open_top else n):
             b = (a + 1) % n
             bm.faces.new([o0[a], o0[b], o1[b], o1[a]]).material_index = k.A
             bm.faces.new([i0[a], i1[a], i1[b], i0[b]]).material_index = k.IN
@@ -255,18 +286,31 @@ class Hull:
         k = self.k
         ins = self.inside
         hw, top, ch = self.hw_in, self.top_in, self.ch_in
+        if self.open_top:
+            top, ch = self.H, 0.0
         door_top = FLOOR - Y0 + 1.95
-        for sx, door in ((1, front_door), (-1, rear_door)):
+
+        def y_at(z):   # 端牆頂緣在橫向位置 z 的高度
+            if self.gable:
+                return top - ch * abs(z) / hw
+            return top if abs(z) <= hw - ch else top - (abs(z) - (hw - ch))
+        for sx, door, wall in ((1, front_door, self.walls[0]), (-1, rear_door, self.walls[1])):
+            if not wall:
+                continue
             x = self.x0 + sx * (self.L / 2 - 0.03)
             for mi, a0, a1 in ((k.A, x + sx * 0.005, x + sx * 0.03), (k.IN, x - sx * 0.02, x + sx * 0.005)):
                 x0, x1 = min(a0, a1), max(a0, a1)
                 if door:
                     for side in (-1, 1):
-                        poly = [(side * hw, WALL), (side * DOOR, WALL), (side * DOOR, top), (side * (hw - ch), top), (side * hw, top - ch)]
+                        poly = [(side * hw, WALL), (side * DOOR, WALL), (side * DOOR, y_at(DOOR))]
+                        if not self.gable and ch > 0:
+                            poly.append((side * (hw - ch), top))
+                        poly.append((side * hw, y_at(hw)))
                         ins.prism([(z, Y0 + y) for z, y in poly], x0, x1, mi)
-                    ins.prism([(-DOOR, Y0 + door_top), (DOOR, Y0 + door_top), (DOOR, Y0 + top), (-DOOR, Y0 + top)], x0, x1, mi)
+                    lin = [(-DOOR, door_top), (DOOR, door_top), (DOOR, y_at(DOOR))] + ([(0, top)] if self.gable else []) + [(-DOOR, y_at(DOOR))]
+                    ins.prism([(z, Y0 + y) for z, y in lin], x0, x1, mi)
                 else:
-                    poly = [(-hw, WALL), (hw, WALL), (hw, top - ch), (hw - ch, top), (-hw + ch, top), (-hw, top - ch)]
+                    poly = [(z, y) for z, y in self.profile(WALL)] if not self.open_top else [(-hw, WALL), (hw, WALL), (hw, top), (-hw, top)]
                     ins.prism([(z, Y0 + y) for z, y in poly], x0, x1, mi)
             if door:
                 ins.box((x, Y0 + door_top + 0.03, 0), (0.09, 0.06, DOOR * 2 + 0.1), k.IST)
@@ -299,8 +343,15 @@ class Hull:
                     ins.box((x, 2.62, self.on_wall(side, 0.09)), (0.04, 0.05, 0.09), k.IST)
                     ins.box((x, 1.48, self.on_wall(side, 0.12)), (0.05, 0.06, 0.12), k.IST)
         for x in xs:
+            if self.open_top:
+                continue
             if not skipped(x, ceiling_skip):
-                ins.box((x, self.ceil - 0.03, 0), (0.06, 0.06, self.roof_half_in * 2), k.IST)
+                if self.gable:   # 人字屋頂：屋簷高度的繫樑＋屋脊樑
+                    ins.box((x, self.wall_top + 0.03, 0), (0.06, 0.06, self.hw_in * 2), k.IST)
+                else:
+                    ins.box((x, self.ceil - 0.03, 0), (0.06, 0.06, self.roof_half_in * 2), k.IST)
+        if self.gable:
+            ins.box((self.x0, self.ceil - 0.06, 0), (self.L - 0.1, 0.08, 0.08), k.IST)
 
     def voice_tube(self, drops=(), z=0.6):
         """沿天花板的黃銅傳聲管，drops 處垂下話口；另一側為電纜。"""
@@ -471,7 +522,8 @@ class Hull:
     def lifting_rings(self):
         for sx in (1, -1):
             for z in (-0.6, 0.6):
-                self.det.lathe((self.x0 + sx * (self.L / 2 - 0.4), self.roof + 0.06, z), (1, 0, 0),
+                y = self.roof - (self.C * abs(z) / (self.W / 2) if self.gable else 0.0)
+                self.det.lathe((self.x0 + sx * (self.L / 2 - 0.4), y + 0.06, z), (1, 0, 0),
                                [(0, 0.08), (0.03, 0.08), (0.03, 0.05), (0, 0.05)], 10, self.k.ST, closed=True)
 
     def rivets(self, skip=()):
@@ -495,10 +547,12 @@ class Hull:
                     if skipped(x) and y < self.wall_top:
                         continue
                     r.rivet((x, y, zs), nrm)
-        for z in (-(self.roof_half - 0.05), self.roof_half - 0.05):
+        for z in ((0.0,) if self.gable else () if self.open_top else (-(self.roof_half - 0.05), self.roof_half - 0.05)):
             for j in range(int((self.L - 0.3) / 0.14)):
                 r.rivet((self.x_min + 0.15 + j * 0.14, self.roof, z), (0, 1, 0))
-        for sx in (1, -1):
+        for sx, wall in ((1, self.walls[0]), (-1, self.walls[1])):
+            if not wall:
+                continue
             for j in range(21):
                 z = -1.4 + 0.14 * j
                 r.rivet((self.x0 + sx * self.L / 2, Y0 + 0.08, z), (sx, 0, 0))
@@ -509,3 +563,129 @@ class Hull:
         self.inside.build(f'{self.name}Interior', k.MATS, parent=k.root, bevel=0.008)
         self.det.build(f'{self.name}Details', k.MATS, parent=k.root, bevel=0.012)
         self.riv.build(f'{self.name}Rivets', [k.M['armor']], parent=k.root)
+
+
+# ───────────────────────────── 多段車體共用零件（依 1934 年照片） ─────────────────────────────
+# 火砲車等「中段加高」的車廂由數段 Hull 組成：低段在交界處不做隔牆（front_wall／rear_wall=False），
+# 由較高的一段的隔牆封住，並用 bulkhead_face() 把朝低段車內那一面漆成車內色。
+
+def bulkhead_face(kit, low, b, toward):
+    """b：交界的 x；toward：低段在交界的哪一側（+1 前方、-1 後方）。"""
+    x0, x1 = sorted((b, b + toward * 0.012))
+    hw, top, ch = low.hw_in, low.top_in, low.ch_in
+    door_top = FLOOR - Y0 + 1.95
+    for side in (-1, 1):
+        poly = [(side * hw, WALL), (side * DOOR, WALL), (side * DOOR, top), (side * (hw - ch), top), (side * hw, top - ch)]
+        low.inside.prism([(z, Y0 + y) for z, y in poly], x0, x1, kit.IN)
+    low.inside.prism([(-DOOR, Y0 + door_top), (DOOR, Y0 + door_top), (DOOR, Y0 + top), (-DOOR, Y0 + top)], x0, x1, kit.IN)
+
+
+def step_rivets(kit, hi, b, toward, roof, raise_h):
+    """加高段端面（低段車頂以上）的鉚釘。"""
+    for j in range(20):
+        hi.riv.rivet((b, roof + 0.1 + (raise_h - 0.15) * (j % 2), -1.33 + j * 0.14), (toward, 0, 0))
+
+
+def windows(kit, seg, xs, ys, w=3.1, sides=(-1, 1)):
+    """側面的小窗（觀察孔）、上方遮簷與半開的滑動閘板。"""
+    d = seg.det
+    for side in sides:
+        zs = side * (w / 2)
+        for x in xs:
+            for y in ys:
+                d.box((x, y, zs + side * 0.005), (0.24, 0.13, 0.02), kit.BLK)
+                d.box((x, y + 0.11, zs + side * 0.03), (0.34, 0.04, 0.06), kit.A)
+                d.box((x + 0.2, y, zs + side * 0.02), (0.12, 0.17, 0.02), kit.A)
+
+
+def window_row(seg, keep_clear=(), spacing=1.05):
+    """沿車體段等距排列的窗位置，避開 keep_clear（[(x0, x1)]，門、砲塔等）。"""
+    xs = [seg.x_min + 0.7 + i * spacing for i in range(int((seg.L - 1.0) / spacing) + 1)]
+    return [x for x in xs if x < seg.x_max - 0.4 and not any(a <= x <= b for a, b in keep_clear)]
+
+
+def end_handrails(kit, seg, x, w=3.1):
+    for side in (-1, 1):
+        zs = side * w / 2
+        seg.det.cylinder((x, 1.4, zs + side * 0.08), (x, 2.6, zs + side * 0.08), 0.018, 6, kit.ST)
+        for y in (1.4, 2.6):
+            seg.det.cylinder((x, y, zs), (x, y, zs + side * 0.09), 0.015, 6, kit.ST)
+
+
+def skirts_and_jacks(kit, length, w=3.1, jack_x=(-4.2, 4.2), name='SkirtsAndJacks'):
+    """側裙板（遮住轉向架上半）與收納在車側下方、射擊時保持車身水平用的制動棒。"""
+    k = kit
+    sk = MeshBuilder()
+    for side in (-1, 1):
+        z = side * (w / 2 - 0.02)
+        for x0, x1 in ((-length / 2 + 0.3, -1.6), (1.6, length / 2 - 0.3)):
+            sk.box(((x0 + x1) / 2, 0.86, z), (x1 - x0, 0.48, 0.03), k.A)
+            for j in range(int((x1 - x0) / 0.2)):
+                sk.rivet((x0 + 0.1 + j * 0.2, 1.05, z + side * 0.015), (0, 0, side))
+        sk.box((0, 0.98, z), (3.2, 0.24, 0.03), k.A)
+        for xc in jack_x:
+            sk.cylinder((xc - 1.1, 0.56, z - side * 0.08), (xc + 1.1, 0.56, z - side * 0.08), 0.035, 10, k.ST)
+            for d in (-1, 1):
+                sk.cylinder((xc + d * 1.15, 0.56, z - side * 0.08), (xc + d * 1.22, 0.56, z - side * 0.08), 0.11, 14, k.ST)
+                sk.box((xc + d * 0.9, 0.66, z - side * 0.08), (0.06, 0.16, 0.06), k.ST)
+    sk.build(name, k.MATS, parent=k.root, bevel=0.006)
+
+
+def cupola(kit, mb, cx, cz, roof, r=0.55, height=0.6, mg_dir_deg=None):
+    """車頂小型旋轉機槍塔。mg_dir_deg 給值時加一挺裝飾用機槍（不可操作）。"""
+    k = kit
+    top = roof + height
+    y0 = roof - 0.3
+    mb.lathe((cx, y0, cz), (0, 1, 0), [(0, r), (top - y0 - 0.07, r), (top - y0, r - 0.07), (top - y0, 0)], 28, k.A, cap0=False)
+    mb.cylinder((cx - 0.08, top, cz), (cx - 0.08, top + 0.05, cz), r * 0.4, 16, k.A)
+    for j in range(24):
+        a = 2 * math.pi * j / 24
+        mb.rivet((cx + math.cos(a) * r, roof + 0.05, cz + math.sin(a) * r), (math.cos(a), 0, math.sin(a)))
+    if mg_dir_deg is not None:
+        a = math.radians(mg_dir_deg)
+        px, pz = cx + math.cos(a) * r, cz - math.sin(a) * r
+        mb.lathe((px, roof + 0.12, pz), (math.cos(a), 0, -math.sin(a)), [(0, 0.18), (0.12, 0.12), (0.16, 0)], 16, k.A)
+        mb.lathe((px, roof + 0.12, pz), (math.cos(a), 0, -math.sin(a)), [(0.1, 0.06), (0.6, 0.06), (0.6, 0.02), (1.0, 0.02)], 10, k.GUN)
+
+
+def cupola_platform(kit, seg, cx, cz):
+    """機槍塔下方的踏台與踏階（機槍手站上去，頭伸進塔內）。"""
+    k = kit
+    si = seg.inside
+    si.box((cx, FLOOR + 0.95, cz), (0.85, 0.08, 0.8), k.WOOD)
+    for dx in (-0.35, 0.35):
+        for dz in (-0.3, 0.3):
+            si.box((cx + dx, FLOOR + 0.46, cz + dz), (0.05, 0.92, 0.05), k.IST)
+    inward = -1 if cx > 0 else 1
+    for j, h in enumerate((0.32, 0.64)):
+        si.box((cx + inward * (0.62 + (1 - j) * 0.28), FLOOR + h, cz), (0.28, 0.05, 0.6), k.WOOD)
+
+
+def faceted_body(mb, n, r_low, r_top, y0, y1, y2, mi):
+    """多面體砲塔本體：y0–y1 直立側板、y1–y2 斜板收到頂板；一面朝 +X（正面）。"""
+    from common import V
+    bm = mb.bm
+    off = math.pi / n
+
+    def ring(r, y):
+        return [bm.verts.new(V(math.cos(off + 2 * math.pi * i / n) * r, y, -math.sin(off + 2 * math.pi * i / n) * r)) for i in range(n)]
+
+    a, b, c = ring(r_low, y0), ring(r_low, y1), ring(r_top, y2)
+    for i in range(n):
+        j = (i + 1) % n
+        bm.faces.new([a[i], a[j], b[j], b[i]]).material_index = mi
+        bm.faces.new([b[i], b[j], c[j], c[i]]).material_index = mi
+    bm.faces.new(list(reversed(a))).material_index = mi
+    bm.faces.new(c).material_index = mi
+
+
+def timber_lining(kit, seg, x0, x1, sides=(-1, 1)):
+    """裝甲板內側的木材支撐：直立木板條＋橫撐。"""
+    k = kit
+    for side in sides:
+        n = max(1, int((x1 - x0) / 0.18))
+        for j in range(n):
+            x = x0 + 0.09 + j * (x1 - x0) / n
+            seg.inside.box((x, (FLOOR + seg.wall_top) / 2, seg.on_wall(side, 0.035)), (0.15, seg.wall_top - FLOOR - 0.05, 0.035), k.WOOD)
+        for y in (FLOOR + 0.5, seg.wall_top - 0.35):
+            seg.inside.box(((x0 + x1) / 2, y, seg.on_wall(side, 0.075)), (x1 - x0, 0.1, 0.05), k.WOOD)

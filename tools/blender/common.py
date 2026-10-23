@@ -221,31 +221,71 @@ def save_image(name, rgb, folder):
 
 
 def camo_texture(folder, n=1024, seed=1934):
-    """日軍 1930 年代三色迷彩（土黃底、綠、褐）＋板縫、污漬。一張代表 4 m。"""
+    """1934 年試驗運行時的塗裝（依當時照片）：深橄欖底、低對比褐色斑，
+    加上細的黃赭色彎曲條紋（寬約 11 cm、大致垂直、間隔約 2 m，偶有彎鉤）。
+    一張代表 4 m，上下左右皆可平鋪。另含板縫與污漬。"""
     rng = np.random.default_rng(seed)
-    khaki = srgb('#8c7a52')
-    green = srgb('#4d5636')
-    brown = srgb('#5e4630')
+    base = srgb('#4b5034')
+    patch = srgb('#4f4630')
+    stripe = srgb('#c9ad66')
+    px = n / 4.0  # 每公尺像素
+    rows = np.arange(n)
+    cols = np.arange(n)
     m1 = fbm(n, 3, 4, rng)
-    m2 = fbm(n, 3, 4, rng)
     rgb = np.empty((n, n, 3))
-    rgb[:] = khaki
-    rgb[m1 > 0.56] = green
-    rgb[(m2 > 0.58) & (m1 <= 0.56)] = brown
+    rgb[:] = base
+    # 低對比的褐色斑（照片中較深的區塊）
+    soft = np.clip((m1 - 0.55) / 0.08, 0, 1) * 0.8
+    rgb = rgb * (1 - soft[:, :, None]) + patch[None, None, :] * soft[:, :, None]
+
+    mask = np.zeros((n, n))
+    half_w = 0.055 * px
+
+    def paint_curve(xc, rows_sel, slope, scale=1.0):
+        """xc：每列條紋中心（像素，可超出邊界、以平鋪處理）；scale：每列寬度倍率。"""
+        hw = half_w * np.sqrt(1 + slope ** 2) * scale
+        for r, x, w in zip(rows_sel, xc, hw):
+            d = np.abs(((cols - x + n / 2) % n) - n / 2)
+            mask[r] = np.maximum(mask[r], np.clip(w + 1.0 - d, 0, 1))
+
+    # 大致垂直的彎曲條紋：每 4 m 兩條（垂直方向週期 = 一張圖，可平鋪）
+    t = rows / n * 2 * np.pi
+    lines = []
+    for i, x0 in enumerate((0.9, 2.9)):
+        k1, k2 = 1, 2
+        a1, a2 = rng.uniform(0.25, 0.45) * px, rng.uniform(0.08, 0.16) * px
+        p1, p2 = rng.uniform(0, 6.28), rng.uniform(0, 6.28)
+        x = x0 * px + a1 * np.sin(k1 * t + p1) + a2 * np.sin(k2 * t + p2)
+        dx = (a1 * k1 * np.cos(k1 * t + p1) + a2 * k2 * np.cos(k2 * t + p2)) * 2 * np.pi / n
+        paint_curve(x, rows, dx)
+        lines.append(x)
+    # 彎鉤：從條紋分出的一段弧（照片中常見的 J／S 形），末端漸細
+    for li, y0, span, sgn in ((0, 0.7, 1.1, 1), (1, 2.6, 0.9, -1)):
+        r0 = int(y0 * px)
+        rr = np.arange(r0, r0 + int(0.9 * px)) % n
+        u = np.arange(len(rr)) / len(rr)
+        x = lines[li][r0] + sgn * span * px * np.sin(u * np.pi / 2) ** 1.5
+        dx = np.gradient(x)
+        paint_curve(x, rr, dx, scale=1 - 0.65 * u ** 2)
+    # 條紋邊緣些微不規則、局部磨損
+    wear = fbm(n, 24, 3, rng)
+    mask *= np.clip((wear - 0.18) / 0.1, 0.55, 1)
+    rgb = rgb * (1 - mask[:, :, None]) + stripe[None, None, :] * mask[:, :, None]
+
     # 細部明暗與垂直雨痕
     grain = fbm(n, 32, 3, rng)
     streak = fbm(n, 4, 2, rng)
     streak_v = np.repeat(_noise(n, 96, rng)[:1, :], n, axis=0)
     shade = 0.9 + grain * 0.16 - streak_v * 0.07 - (streak - 0.5) * 0.06
     rgb *= shade[:, :, None]
-    # 板縫：每 1 m（256 px）
+    # 板縫：每 1 m（n/4 px）
     step = n // 4
     for k in range(0, n, step):
-        rgb[k:k + 3, :] *= 0.45
-        rgb[k + 3:k + 5, :] *= 1.12
-        rgb[:, k:k + 3] *= 0.45
-        rgb[:, k + 3:k + 5] *= 1.12
-    return save_image('armor_camo', rgb, folder)
+        rgb[k:k + 3, :] *= 0.5
+        rgb[k + 3:k + 5, :] *= 1.1
+        rgb[:, k:k + 3] *= 0.5
+        rgb[:, k + 3:k + 5] *= 1.1
+    return save_image('armor_camo_1934', rgb, folder)
 
 
 def paint_texture(folder, color, name, n=512, seed=7):

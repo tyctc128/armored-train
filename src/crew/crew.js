@@ -7,13 +7,13 @@ const R = -Math.PI / 2; // 面向右側牆（+Z）
 
 // 指揮車的固定乘員（車廂本地座標）
 const COMMAND_ROSTER = [
-  { variant: 'officer', name: '副官 山田中尉', x: 1.25, z: -0.55, yaw: L, pose: 'map',
+  { variant: 'officer', name: '副官 山田中尉', x: 1.4, z: -0.62, yaw: L, pose: 'sitWork',
     lines: ['報告指揮官，路線圖已標好。', '各車回報已就位！', '請指揮官下令。'] },
   { variant: 'crew', name: '傳令兵 佐藤一等兵', x: 4.0, z: 0.85, yaw: 0, pose: 'telegraph',
     lines: ['傳令鐘待命中！', '司機回報鍋爐壓力正常。'] },
-  { variant: 'crew', name: '通信兵 鈴木上等兵', x: -1.6, z: -1.02, yaw: L + 0.6, pose: 'sitWork',
-    lines: ['各車電話線路正常。', '火砲車丙回報：測距儀已校正。'] },
-  { variant: 'crew', name: '無線電兵 高橋一等兵', x: -3.6, z: 0.72, yaw: R, pose: 'operate',
+  { variant: 'crew', name: '通信兵 鈴木上等兵', x: -0.7, z: -0.6, yaw: L, pose: 'operate',
+    lines: ['各車電話線路正常。', '火砲車乙回報：測距儀已校正。'] },
+  { variant: 'crew', name: '無線電兵 高橋一等兵', x: -1.2, z: 0.62, yaw: R, pose: 'operate',
     lines: ['本部暫無新電報。', '收訊良好！'] },
   { variant: 'soldier', name: '哨兵 中村二等兵', walker: { x0: -5.6, x1: 5.2, z: 0.32 }, pose: 'stand',
     lines: ['指揮官好！', '巡視車內，一切正常！'] },
@@ -44,21 +44,19 @@ export class Crew {
           // 機槍手站在槍架內側，面向射擊方向
           const yaw = st.ref.center;
           const bp = st.ref.base.position;
-          this.add(car, { variant: 'soldier', name: nextName('機槍手'), x: bp.x - Math.cos(yaw) * 0.62, z: bp.z + Math.sin(yaw) * 0.62, yaw, pose: 'operate', station: st.obj,
+          // 機槍裝得高（警戒車前端塔內）時，機槍手站在踏台上
+          this.add(car, { variant: 'soldier', name: nextName('機槍手'), x: bp.x - Math.cos(yaw) * 0.62, z: bp.z + Math.sin(yaw) * 0.62, y: Math.max(FLOOR_Y, bp.y - 1.25), yaw, pose: 'operate', exposed: !!car.openTop, station: st.obj,
             lines: ['射界內無敵蹤！', '保彈板充足！', '隨時可以射擊！'] });
-        } else if (st.type === 'gun' && car.kind === 'gunC') {
-          // 敞頂七糎砲塔內的砲組（暴露位置）：砲手操砲、另一人裝填
-          this.add(car, { variant: 'soldier', name: nextName('七糎砲手'), x: st.x + 0.4, z: -0.7, y: car.roofY + 0.22, yaw: Math.PI, pose: 'operate', exposed: true, station: st.obj,
-            lines: ['七糎砲待命！'] });
-          this.add(car, { variant: 'soldier', name: nextName('七糎裝填手'), x: st.x + 0.4, z: 0.7, y: car.roofY + 0.22, yaw: Math.PI, pose: 'operate', exposed: true, loader: st.obj,
-            lines: ['七糎彈備妥！'] });
         } else if (st.type === 'gun') {
+          const gunName = st.weapon === 'type88' ? '七糎砲' : '十糎砲';
           this.add(car, { variant: 'crew', name: nextName('砲手'), x: st.x - 0.25, z: -0.55, yaw: 0, pose: 'lookUp', station: st.obj,
-            lines: ['十糎砲待命！', '榴弾已備妥！'] });
+            lines: [`${gunName}待命！`, '榴弾已備妥！'] });
           this.add(car, { variant: 'crew', name: nextName('裝填手'), x: st.x + 2.2, z: 0.62, yaw: 0, pose: 'carry', loader: st.obj,
             lines: ['砲彈搬運中！'] });
         } else if (st.type === 'rangefinder') {
-          this.add(car, { variant: 'crew', name: nextName('測距手'), x: st.x - 0.1, z: 0.45, yaw: 0, pose: 'lookUp', station: st.obj,
+          // 測距手坐在車頂操作（乙車上層車頂；照片中的操作手），屬暴露位置
+          const onRoof = st.ref.crewY != null;
+          this.add(car, { variant: 'crew', name: nextName('測距手'), x: st.x - 0.55, z: onRoof ? -0.45 : 0.45, y: onRoof ? st.ref.crewY : undefined, yaw: 0, pose: onRoof ? 'sitWork' : 'lookUp', exposed: onRoof, station: st.obj,
             lines: ['測距儀已校正！', '標記目標後我會精確測距。'] });
         } else if (st.type === 'mortar') {
           // 敞頂迫砲座的砲組（暴露位置）：分站迫砲座兩端，不擋指揮官從砲後方瞄準

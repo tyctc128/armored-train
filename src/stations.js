@@ -98,7 +98,8 @@ function shake(camera, amount) {
 
 // ─────────────────────────────── 十糎砲 ───────────────────────────────
 export class GunStation {
-  constructor(game, car, gun, label, weapon = WEAPONS.type14) {
+  // gun2：同一崗位連動的第二座砲塔（火砲車丙）：同步轉向、輪流射擊
+  constructor(game, car, gun, label, weapon = WEAPONS.type14, gun2 = null) {
     this.type = 'gun';
     this.game = game;
     this.car = car;
@@ -116,6 +117,8 @@ export class GunStation {
     this.zoom = false;
     this.recoilT = 1;
     this.shake = 0;
+    this.gun2 = gun2;
+    this.recoilT2 = 1;
   }
 
   get shell() {
@@ -190,10 +193,16 @@ export class GunStation {
     }
 
     this.recoilT = Math.min(1, this.recoilT + dt / 1.4);
-    const k = this.recoilT;
-    this.gun.recoil.position.x = k < 0.08 ? -0.9 * (k / 0.08) : -0.9 * (1 - (k - 0.08) / 0.92) ** 2;
+    const recoil = (k) => (k < 0.08 ? -0.9 * (k / 0.08) : -0.9 * (1 - (k - 0.08) / 0.92) ** 2);
+    this.gun.recoil.position.x = recoil(this.recoilT);
     this.gun.turret.rotation.y = this.yaw;
     this.gun.elev.rotation.z = this.elev;
+    if (this.gun2) {
+      this.recoilT2 = Math.min(1, this.recoilT2 + dt / 1.4);
+      this.gun2.recoil.position.x = recoil(this.recoilT2) * 0.7;
+      this.gun2.turret.rotation.y = this.yaw;
+      this.gun2.elev.rotation.z = this.elev;
+    }
     this.shake = Math.max(0, this.shake - dt * 0.15);
   }
 
@@ -209,8 +218,9 @@ export class GunStation {
       g.message('未裝填（按住 R 裝填）', 'alert');
       return;
     }
-    const muzzle = this.gun.muzzle.getWorldPosition(new THREE.Vector3());
-    this.gun.elev.getWorldQuaternion(_q);
+    const gun = this.firingGun();
+    const muzzle = gun.muzzle.getWorldPosition(new THREE.Vector3());
+    gun.elev.getWorldQuaternion(_q);
     const dir = X_AXIS.clone().applyQuaternion(_q);
     const blocker = g.train.rayBlocked(muzzle, dir, this.car);
     if (blocker) {
@@ -232,8 +242,24 @@ export class GunStation {
     g.stats.shots++;
     this.rounds++;
     this.loaded = null;
-    this.recoilT = 0;
+    if (gun === this.gun) this.recoilT = 0;
+    else this.recoilT2 = 0;
     this.shake = 0.03;
+  }
+
+  // 連動的兩座砲塔輪流射擊；砲口方向會掃過另一座砲塔時改由另一座射擊
+  firingGun() {
+    if (!this.gun2) return this.gun;
+    const want = this.rounds % 2 === 0 ? this.gun : this.gun2;
+    const other = want === this.gun ? this.gun2 : this.gun;
+    const p = want.turret.getWorldPosition(new THREE.Vector3());
+    const q = other.turret.getWorldPosition(new THREE.Vector3());
+    want.elev.getWorldQuaternion(_q2);
+    const dir = X_AXIS.clone().applyQuaternion(_q2);
+    const toOther = q.sub(p);
+    const horiz = Math.hypot(toOther.x, toOther.z);
+    const cosA = (dir.x * toOther.x + dir.z * toOther.z) / (Math.hypot(dir.x, dir.z) * horiz);
+    return cosA > Math.cos(25 * DEG) && dir.y < 0.14 ? other : want;
   }
 
   applyCamera(camera) {
@@ -785,7 +811,7 @@ export class RangefinderStation {
     this.car = car;
     this.yawG = ref.yawG;
     this.anchor = ref.anchor;
-    this.label = '火砲車丙 測距儀';
+    this.label = '火砲車乙 測距儀';
     this.yaw = Math.PI / 2;
     this.pitch = 0;
     this.zoom = true;
@@ -873,7 +899,7 @@ export class RangefinderStation {
 
   hud() {
     return `
-      <div class="acc">火砲車丙 測距儀</div>
+      <div class="acc">火砲車乙 測距儀</div>
       <div class="k">滑鼠：轉向　左鍵：測距並記入目標簿　右鍵：倍率　E：離開</div>`;
   }
 }

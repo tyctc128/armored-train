@@ -109,7 +109,7 @@ export function helpHtml(train) {
       <div>右鍵觀測鏡，左鍵標記方位（距離為目測，誤差約 ±12%）</div>
     </div>
     <div>
-      <h3>測距儀（火砲車丙）</h3>
+      <h3>測距儀（火砲車乙車頂）</h3>
       <div>左鍵測距，結果記入目標簿；誤差隨距離增加</div>
     </div>
     <div>
@@ -181,7 +181,7 @@ export function level5BriefHtml() {
   <div>敵車側甲約 20 mm：<b>榴弾打不穿，要用尖鋭弾</b>。<b>兩節砲車都擊毀、或任意 3 節被毀</b>，敵車就失去戰鬥力。擊毀敵指揮車，敵砲修正會變慢；擊毀機關車，敵車就動不了。</div>
   <h3>砲戰要領</h3>
   <div>① <b>停車射擊</b>：行進間很難命中。我方移動 50 m 以上，敵砲就得重新試射，可以用來擺脫敵砲的修正。</div>
-  <div>② <b>測距</b>：到火砲車丙的測距儀測敵車，或在指揮台觀測鏡標記（測距手會補上精確距離）。</div>
+  <div>② <b>測距</b>：到火砲車乙的測距儀測敵車，或在指揮台觀測鏡標記（測距手會補上精確距離）。</div>
   <div>③ <b>射擊</b>：按 <kbd>C</kbd> 下令甲砲、乙砲「砲擊選定目標」，砲手會用尖鋭弾（七糎砲用破甲榴弾）並依彈著修正；也可以親自上砲（<kbd>1</kbd> 尖鋭弾、七糎砲 <kbd>3</kbd> 破甲榴弾）。</div>
   <div class="note">車廂被擊穿 16 次即任務失敗；指揮官陣亡時由預備士兵接替（3 名）。12 分鐘內、零傷亡、被擊穿 2 次以下才有 S。</div>
   <div class="brief-btns">
@@ -295,7 +295,7 @@ export function firingTableHtml(weapon, wantShell) {
 
 export function targetBookHtml(book, now) {
   if (!book.entries.length) {
-    return '<h2>目標簿</h2><div>尚無紀錄。到火砲車丙測距儀測距，或在指揮台觀測鏡中標記目標。</div>';
+    return '<h2>目標簿</h2><div>尚無紀錄。到火砲車乙測距儀測距，或在指揮台觀測鏡中標記目標。</div>';
   }
   const rows = book.entries
     .map(

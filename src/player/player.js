@@ -230,7 +230,7 @@ export class Player {
     const w = this.train.carAt(a);
     if (!w || !w.car.loco || w.inGap) return 0;
     const L2 = w.car.len / 2;
-    return w.x < L2 - 1.2 && w.x > -L2 + 1.15 ? 1.62 : 0;
+    return w.x < L2 - 0.9 && w.x > -L2 + 1.15 ? 1.62 : 0;
   }
 
   autoWalk(dt) {

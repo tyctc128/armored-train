@@ -53,7 +53,7 @@ export function buildSteps(ctx) {
   const rf = S.find((s) => s.type === 'rangefinder');
   const gunB = S.find((s) => s.type === 'gun' && s.car.kind === 'gunB');
   const gunCar = ctx.train.cars[CAR.gunB];
-  const hatchGoto = { car: CAR.gunB, x: gunCar.hatches[0], lat: -0.5, level: 'in', label: '火砲車乙 艙口梯' };
+  const hatchGoto = { car: CAR.gunB, x: gunCar.hatches[0], lat: 0, level: 'in', label: '火砲車乙 艙口梯' };
   const tmp = new THREE.Vector3();
   const tq = new THREE.Quaternion();
 
@@ -143,8 +143,8 @@ export function buildSteps(ctx) {
     { title: '離開槍位', text: `按 ${K('E')} 離開機槍。`, check: (c) => c.game.mode === 'walk' },
 
     // ───────────── 第 4 章：測距 ─────────────
-    { chapter: '測距與目標簿', title: '前往火砲車丙', car: CAR.gunC, text: `測距儀在第 4 節「火砲車丙」。按 ${K('4')} 自動走過去。`,
-      check: (c) => inCar(c, CAR.gunC) && !c.player.auto },
+    { chapter: '測距與目標簿', title: '前往火砲車乙', car: CAR.gunB, text: `測距儀在第 3 節「火砲車乙」的上層車頂，由車內下方操作。按 ${K('3')} 自動走過去。`,
+      check: (c) => inCar(c, CAR.gunB) && !c.player.auto },
     { title: '走到測距儀下方', text: `跟著黃色箭頭走到測距儀的操作位。`,
       goto: (c) => stationGoto(c, rf, '測距儀'),
       check: (c) => {
@@ -223,7 +223,7 @@ export function buildSteps(ctx) {
     { title: '離開砲位', text: `按 ${K('E')} 離開十糎砲。`, check: (c) => c.game.mode === 'walk' },
 
     // ───────────── 第 6 章：車頂與其他功能 ─────────────
-    { chapter: '車頂與其他功能', title: '走到艙口梯', text: `每節車都有通往車頂的艙口梯（偏左側）。跟著黃色箭頭走過去。`,
+    { chapter: '車頂與其他功能', title: '走到艙口梯', text: `每節車都有通往車頂的艙口梯。跟著黃色箭頭走到乙車前段的艙口梯。`,
       goto: () => hatchGoto,
       check: (c) => {
         const w = c.player.where();
@@ -231,7 +231,7 @@ export function buildSteps(ctx) {
       } },
     { title: '爬上車頂', text: `按 ${K('E')} 爬上車頂。車頂跑得比較快（約 5 m/s），但屬於<b>暴露位置</b>，會被敵人射擊。`,
       check: (c) => c.player.level === 'roof' },
-    { title: '在車頂移動', text: `用 ${K('Shift')}＋${K('W')} 在車頂跑 6 公尺。注意左上角的「⚠ 暴露位置」。砲塔周圍不能通過。`,
+    { title: '在車頂移動', text: `用 ${K('Shift')}＋${K('W')} 在車頂跑 6 公尺。注意左上角的「⚠ 暴露位置」。砲塔、機槍塔周圍和加高的上層車體不能通過，可以往車頭方向跑到甲車車頂。`,
       enter: (c, st) => (st.a = c.player.a),
       check: (c, st) => c.player.level === 'roof' && Math.abs(c.player.a - st.a) > 6 },
     { title: '回到車內', text: `回到艙口位置（黃色箭頭），按 ${K('E')} 回到車內。`,

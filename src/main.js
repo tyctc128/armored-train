@@ -230,7 +230,7 @@ async function init() {
   for (const car of train.cars) {
     const pool = { rounds: WEAPONS.type92.poolPerCar };
     for (const s of car.stations) {
-      if (s.type === 'gun') s.obj = new GunStation(game, car, s.ref, s.label, WEAPONS[s.weapon ?? 'type14']);
+      if (s.type === 'gun') s.obj = new GunStation(game, car, s.ref, s.label, WEAPONS[s.weapon ?? 'type14'], s.ref2);
       else if (s.type === 'mg') s.obj = new MgStation(game, car, s.ref, pool);
       else if (s.type === 'console') s.obj = new ConsoleStation(game, car, s.ref);
       else if (s.type === 'rangefinder') s.obj = new RangefinderStation(game, car, s.ref);

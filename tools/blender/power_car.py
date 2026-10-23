@@ -1,5 +1,8 @@
 """電源車建模腳本：前段無線電／發電機室，後段敞頂迫砲座（九七式曲射歩兵砲）。
 
+依照片：人字屋頂、屋頂上以絕緣子架設天線、側面一排小窗、發電機排氣煙囪、後端兩挺機槍與 30 cm 探照燈。
+（迫砲座為遊戲虛構，保留。）
+
 執行：
   blender -b --factory-startup -P tools/blender/power_car.py
   （加參數 -- interior 只渲染車內檢查圖到暫存資料夾，不輸出模型）
@@ -14,7 +17,7 @@ import sys
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 import bpy  # noqa: E402
 from common import MeshBuilder, script_args, render_preview, V  # noqa: E402
-from parts import Kit, FLOOR, Y0  # noqa: E402
+from parts import Kit, FLOOR, Y0, windows, window_row  # noqa: E402
 
 NAME = 'power_car'
 CN = '電源車'
@@ -26,18 +29,24 @@ PIT_TOP = 2.6
 MG_X, MG_Y = -LEN / 2 + 0.75, 2.25
 MORTAR_X = -4.6
 HATCH_X = LEN / 2 - 4.2
-SCRATCH = r'C:\Users\HSPS\AppData\Local\Temp\claude\C--Users-HSPS-Desktop-115------\b11bc165-f08e-4618-b89e-90e20b4ac3e1\scratchpad'
+SCRATCH = os.environ.get('MODEL_SCRATCH', os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'docs', 'preview'))
 
 kit = Kit('PowerCar')
 k = kit
-hull = kit.hull(length=HULL_LEN, w=W, h=2.4, x0=X0)
+GABLE = 0.5   # 屋簷到屋脊的落差
+hull = kit.hull(length=HULL_LEN, w=W, h=2.4, c=GABLE, x0=X0, gable=True)
 ROOF = hull.roof
+
+
+def roof_y(z):
+    return ROOF - GABLE * abs(z) / (W / 2)
+
 ins = hull.inside
 R, L = 1, -1   # 右側牆、左側牆
 
 # ───────────────────────────── 車內（無線電／發電機室） ─────────────────────────────
 hull.lamps((-1.4, 2.4, 5.6))
-hull.hatch(HATCH_X)
+hull.hatch(HATCH_X, z=-0.45)
 
 # 發電機組（右側牆）：引擎、飛輪、發電機、排氣管
 zg = hull.on_wall(R, 0.4)
@@ -131,17 +140,40 @@ hull.inner_slits((0.6,))
 hull.side_details(doors=(0.0,), slits=(0.6, 4.0), ports=(5.2,))
 hull.vents((1.5,))
 hull.lifting_rings()
-# 排氣煙囪（車頂）
-hull.det.cylinder((6.3, ROOF - 0.05, 0.75), (6.3, ROOF + 0.55, 0.75), 0.07, 12, k.ST)
-hull.det.lathe((6.3, ROOF + 0.55, 0.75), (0, 1, 0), [(0, 0.13), (0.06, 0.13), (0.08, 0)], 12, k.ST)
-# 天線桅杆與天線
-for x in (X0 - 2.5, X0 + 2.5):
-    hull.det.lathe((x, ROOF, 0), (0, 1, 0), [(0, 0.16), (0.05, 0.12), (0.05, 0)], 12, k.ST, cap0=False)
-    hull.det.cylinder((x, ROOF, 0), (x, ROOF + 3.5, 0), 0.04, 8, k.ST, r1=0.025)
-    for y in (ROOF + 1.2, ROOF + 3.3):
-        hull.det.lathe((x, y, 0), (0, 1, 0), [(0, 0.05), (0.08, 0.05), (0.08, 0)], 10, k.WHT)
-hull.det.cylinder((X0 - 2.5, ROOF + 3.35, 0), (X0 + 2.5, ROOF + 3.35, 0), 0.008, 6, k.BLK)
-hull.det.cylinder((X0 + 2.5, ROOF + 3.35, 0), (2.15, ROOF + 0.05, -0.4), 0.008, 6, k.BLK)
+d = hull.det
+# 一排小窗（附裝甲窗蓋）
+windows(k, hull, window_row(hull, keep_clear=[(-0.75, 0.95), (3.65, 4.35), (4.85, 5.55)], spacing=0.9), (2.45,))
+# 艙口座（人字屋頂上的平台）
+d.box((HATCH_X, roof_y(0.95) + 0.06, -0.45), (0.95, 0.3, 0.95), k.A)
+# 排氣煙囪（發電機，右側屋簷）
+ez = 0.75
+d.cylinder((6.3, roof_y(ez) - 0.05, ez), (6.3, ROOF + 0.75, ez), 0.08, 12, k.ST)
+d.lathe((6.3, ROOF + 0.75, ez), (0, 1, 0), [(0, 0.15), (0.06, 0.15), (0.1, 0)], 12, k.ST)
+d.lathe((6.3, roof_y(ez) - 0.02, ez), (0, 1, 0), [(0, 0.16), (0.08, 0.1), (0.08, 0)], 12, k.A)
+d.cylinder((6.3, ROOF + 0.4, ez), (6.3 - 0.12, ROOF + 0.4, ez + 0.05), 0.015, 6, k.ST)
+# 天線：屋頂兩側的絕緣子短柱，兩道天線沿屋頂架設，前端引入線
+POST_XS = [X0 - 3.8 + j * 1.4 for j in range(7)]
+for zp in (-0.95, 0.95):
+    for x in POST_XS:
+        y0 = roof_y(zp)
+        d.cylinder((x, y0 - 0.03, zp), (x, y0 + 0.32, zp), 0.022, 8, k.ST)
+        d.lathe((x, y0 + 0.32, zp), (0, 1, 0), [(0, 0.035), (0.03, 0.055), (0.06, 0.035), (0.09, 0.055), (0.12, 0.035), (0.14, 0)], 10, k.WHT)  # 礙子
+    d.cylinder((POST_XS[0], roof_y(zp) + 0.43, zp), (POST_XS[-1], roof_y(zp) + 0.43, zp), 0.007, 4, k.CU)
+LEAD_X = 2.15   # 引入線：接到車內左側的長距離無線電
+d.cylinder((LEAD_X, roof_y(0.95) + 0.43, -0.95), (LEAD_X, roof_y(1.3) + 0.12, -1.3), 0.007, 4, k.CU)
+d.lathe((LEAD_X, roof_y(1.3) - 0.02, -1.3), (0, 1, 0), [(0, 0.05), (0.1, 0.04), (0.14, 0)], 10, k.WHT)   # 引入礙子
+# 30 cm 探照燈（車體後端屋脊上，照向後方）
+SLX = PIT_X1 + 0.45
+d.lathe((SLX, roof_y(0.3) - 0.03, 0), (0, 1, 0), [(0, 0.3), (0.08, 0.28), (0.1, 0.12), (0.4, 0.1), (0.42, 0)], 14, k.A)
+for dz in (-0.24, 0.24):
+    d.box((SLX, ROOF + 0.55, dz), (0.12, 0.35, 0.04), k.ST)                     # 叉架
+d.lathe((SLX + 0.2, ROOF + 0.62, 0), (-1, 0, 0), [(0, 0.2), (0.05, 0.22), (0.45, 0.22), (0.5, 0.2)], 20, k.ST, cap0=True, cap1=False)
+d.lathe((SLX - 0.29, ROOF + 0.62, 0), (-1, 0, 0), [(0, 0.17), (0.01, 0)], 20, k.LMP)                          # 燈面
+for j in range(4):
+    d.box((SLX - 0.31, ROOF + 0.5 + j * 0.08, 0), (0.02, 0.012, 0.36), k.ST)                                   # 百葉
+d.cylinder((SLX + 0.2, ROOF + 0.62, -0.24), (SLX + 0.2, ROOF + 0.62, 0.24), 0.03, 8, k.ST)
+d.lathe((SLX + 0.2, ROOF + 0.86, 0), (0, 1, 0), [(0, 0.06), (0.06, 0.06), (0.08, 0)], 10, k.ST)              # 散熱帽
+d.cylinder((SLX + 0.3, ROOF + 0.55, 0.15), (SLX + 0.42, ROOF + 0.45, 0.25), 0.015, 6, k.WOOD)                 # 操作把手
 hull.rivets(skip=[(-0.7, 0.7)])
 hull.finish()
 
