@@ -154,8 +154,7 @@ export class GunStation {
       if (input.hit('Minus') || input.hit('NumpadSubtract')) this.drum = clamp(this.drum - 0.1, 0, 1500);
       if (input.hit('Equal') || input.hit('NumpadAdd')) this.drum = clamp(this.drum + 0.1, 0, 1500);
       this.drum = Math.round(this.drum * 10) / 10;
-      if (input.hit('Digit1')) this.selectShell(0);
-      if (input.hit('Digit2')) this.selectShell(1);
+      for (let i = 0; i < this.w.shells.length; i++) if (input.hit(`Digit${i + 1}`)) this.selectShell(i);
       if (input.hit('BracketLeft')) g.targetBook.cycle(-1);
       if (input.hit('BracketRight')) g.targetBook.cycle(1);
 
@@ -312,10 +311,10 @@ export class GunStation {
       <div class="acc">${this.label}</div>
       <div><span class="k">方位角</span> ${fmtMil(this.azimuthMil())}　<span class="k">射角</span> ${toMil(this.elev).toFixed(1)} 密位</div>
       <div><span class="k">表尺</span> <b>${this.drum.toFixed(1)}</b> 密位${g.settings.assist ? '　<span class="ok">輔助</span>' : ''}</div>
-      <div><span class="k">彈種</span> ${this.shell.name}　<span class="k">尖鋭弾</span> ${this.ammo.AP}　<span class="k">榴弾</span> ${this.ammo.HE}</div>
+      <div><span class="k">彈種</span> ${this.shell.name}　${this.w.shells.map((s) => `<span class="k">${s.name}</span> ${this.ammo[s.id]}`).join('　')}</div>
       <div>${reloadBar}</div>
       <div><span class="k">目標簿</span> ${entry ? `${entry.id} 方位 ${fmtMil(entry.bearing)}・${entry.range} m（${entry.method}）${g.settings.assist ? '' : `<span class="k">　射表約 ${sug}</span>`}` : '—'}</div>
-      <div class="k">滑鼠：方向／俯仰　滾輪：表尺 ±1（Shift ±10、- = 微調 ±0.1）　1/2：彈種　右鍵：倍率　[ ]：選目標　E：離開</div>`;
+      <div class="k">滑鼠：方向／俯仰　滾輪：表尺 ±1（Shift ±10、- = 微調 ±0.1）　${this.w.shells.map((_, i) => i + 1).join('/')}：彈種　右鍵：倍率　[ ]：選目標　E：離開</div>`;
   }
 }
 

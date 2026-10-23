@@ -216,8 +216,9 @@ export class CrewAI {
       ai.phase = 'idle';
       return;
     }
-    // 裝填：對裝甲列車用尖鋭弾，其餘用榴弾
-    const want = g.enemyTrain?.isNear(point) && st.ammo.AP > 0 ? 'AP' : 'HE';
+    // 裝填：對裝甲列車用破甲榴弾（七糎砲）或尖鋭弾，其餘用榴弾
+    const armored = g.enemyTrain?.isNear(point);
+    const want = armored && st.ammo.APHE > 0 ? 'APHE' : armored && st.ammo.AP > 0 ? 'AP' : 'HE';
     if (!st.loaded) {
       ai.phase = 'load';
       if (st.ammo[want] <= 0) return;
