@@ -216,15 +216,16 @@ export class CrewAI {
       ai.phase = 'idle';
       return;
     }
-    // 裝填
+    // 裝填：對裝甲列車用尖鋭弾，其餘用榴弾
+    const want = g.enemyTrain?.isNear(point) && st.ammo.AP > 0 ? 'AP' : 'HE';
     if (!st.loaded) {
       ai.phase = 'load';
-      if (st.ammo.HE <= 0) return;
+      if (st.ammo[want] <= 0) return;
       st.reload += dt / st.w.reloadTime;
       if (st.reload >= 1) {
         st.reload = 0;
-        st.loaded = 'HE';
-        st.ammo.HE--;
+        st.loaded = want;
+        st.ammo[want]--;
       }
       return;
     }
@@ -241,14 +242,21 @@ export class CrewAI {
     const horiz = Math.hypot(to.x, to.z);
     const key = st.car.kind;
     const corr = (mode === 'target' ? this.gunTargets[key]?.corr : ai.corr) ?? 0;
-    const local = to.clone().applyQuaternion(inv);
-    const wantYaw = Math.atan2(-local.z, local.x);
+    // 想要的世界射向（方位＋射角），再換算到砲塔所在車廂的本地座標（車廂在坡道上會前後傾）
     const los = Math.atan2(to.y, horiz);
-    const qe = los + fromMil(lookupElevation(st.w.tables.HE, Math.max(50, horiz + corr)));
+    const qeWorld = los + fromMil(lookupElevation(st.w.tables[st.loaded], Math.max(50, horiz + corr)));
+    const local = this._d.set((to.x / horiz) * Math.cos(qeWorld), Math.sin(qeWorld), (to.z / horiz) * Math.cos(qeWorld)).applyQuaternion(inv);
+    const wantYaw = Math.atan2(-local.z, local.x);
+    const qe = Math.atan2(local.y, Math.hypot(local.x, local.z));
     const dy = wrapAngle(wantYaw - st.yaw);
     st.yaw = wrapAngle(st.yaw + clamp(dy, -st.w.traverseRate * dt, st.w.traverseRate * dt));
     st.elev = clamp(st.elev + clamp(qe - st.elev, -st.w.elevRate * dt, st.w.elevRate * dt), st.w.elevMin, st.w.elevMax);
-    if (Math.abs(dy) < 0.4 * DEG && Math.abs(qe - st.elev) < 0.3 * DEG) {
+    // 開火門檻：射角約為目標處 1.5 m 高、方向約 3 m 寬（遠距離平射要瞄得更準）
+    const tolE = clamp(1.5 / horiz, 0.06 * DEG, 0.3 * DEG);
+    const tolY = clamp(3 / horiz, 0.1 * DEG, 0.4 * DEG);
+    // 目標低於砲的最低射角時，砲壓到最低就照樣射擊
+    const elevOk = Math.abs(qe - st.elev) < tolE || (qe < st.w.elevMin && st.elev <= st.w.elevMin + 1e-4);
+    if (Math.abs(dy) < tolY && elevOk) {
       // 射線上有自己的車廂就等待
       st.gun.elev.getWorldQuaternion(this._q);
       const dir = X_AXIS.clone().applyQuaternion(this._q);
@@ -295,7 +303,8 @@ export class CrewAI {
     const ai = st.ai;
     const from = st.gun.elev.getWorldPosition(new THREE.Vector3());
     const dir = ai.aimPoint.clone().sub(from).setY(0).normalize();
-    const err = point.clone().sub(ai.aimPoint).setY(0).dot(dir);
+    // 平射打車輛時，彈道稍高就會飛越目標、落在很遠處；每次修正最多 80 m，逐步夾叉
+    const err = clamp(point.clone().sub(ai.aimPoint).setY(0).dot(dir), -80, 80);
     const key = st.car.kind;
     if (this.orders.guns[key] === 'target' && this.gunTargets[key]) this.gunTargets[key].corr -= err * 0.85;
     else ai.corr = (ai.corr ?? 0) - err * 0.85;

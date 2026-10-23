@@ -80,8 +80,9 @@ export class Train {
     }
     let target = NOTCHES[this.acknowledged].v;
 
-    // 路線終點保護：司機自行減速
-    const frontRoom = this.track.length - 20 - this.sFront;
+    // 路線終點保護（前方有敵列車時以 limitS 為界）：司機自行減速
+    const limited = this.limitS != null && this.limitS < this.track.length - 20;
+    const frontRoom = (limited ? this.limitS : this.track.length - 20) - this.sFront;
     const rearRoom = this.sFront - this.totalLength - 20;
     const stopDist = (this.speed * this.speed) / (2 * BRAKE) + 4;
     let protecting = false;
@@ -90,7 +91,7 @@ export class Train {
     if (protecting) {
       target = 0;
       if (!this.endWarned) {
-        this.hooks.message('司機：「前方路線終點，減速停車！」', 'alert');
+        this.hooks.message(limited ? '司機：「前方有敵列車，不能再靠近了！」' : '司機：「前方路線終點，減速停車！」', 'alert');
         this.endWarned = true;
       }
     } else if (Math.abs(this.speed) < 0.05) {
@@ -119,7 +120,7 @@ export class Train {
     this.speed += clamp(target - this.speed, -a * dt, a * dt);
     this.sFront += this.speed * dt;
     const min = this.totalLength + 2;
-    const max = this.track.length - 2;
+    const max = Math.min(this.track.length - 2, this.limitS ?? Infinity);
     if (this.sFront < min || this.sFront > max) {
       this.sFront = clamp(this.sFront, min, max);
       this.speed = 0;

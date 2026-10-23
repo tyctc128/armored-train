@@ -17,7 +17,8 @@ import { Crew } from './crew/crew.js';
 import { CrewAI } from './crew/crewAI.js';
 import { Enemies } from './enemy/enemies.js';
 import { Damage } from './combat/damage.js';
-import { LEVELS, LEVEL2, LEVEL3, LEVEL4, MissionRunner, loadProgress } from './missions/missions.js';
+import { LEVELS, LEVEL2, LEVEL3, LEVEL4, LEVEL5, MissionRunner, loadProgress } from './missions/missions.js';
+import { EnemyTrain } from './enemy/enemyTrain.js';
 import { EnemyBattery } from './enemy/battery.js';
 import { RailBreak } from './world/railBreak.js';
 import './missions/missions.css';
@@ -31,7 +32,7 @@ import { WEAPONS } from './data/weapons.js';
 import { TargetRange } from './targets.js';
 import { Audio3D } from './audio.js';
 import { GunStation, MgStation, ConsoleStation, RangefinderStation, MortarStation, TargetBook } from './stations.js';
-import { UI, helpHtml, briefingHtml, firingTableHtml, mortarTableHtml, targetBookHtml, menuHtml, level2BriefHtml, level3BriefHtml, level4BriefHtml } from './ui.js';
+import { UI, helpHtml, briefingHtml, firingTableHtml, mortarTableHtml, targetBookHtml, menuHtml, level2BriefHtml, level3BriefHtml, level4BriefHtml, level5BriefHtml } from './ui.js';
 
 const ui = new UI();
 // 讓載入文字先畫出來（不用 rAF，背景分頁也能繼續載入）
@@ -96,6 +97,7 @@ async function init() {
   let crewAI = null;
   let crew = null;
   let battery = null;
+  let enemyTrain = null;
   const game = {
     time: 0,
     started: false,
@@ -142,6 +144,8 @@ async function init() {
     let tHit = targets.raycast(origin, dir, tDist ?? 15000);
     const eHit = enemies?.raycast(origin, dir, tDist ?? 15000);
     if (eHit && (!tHit || eHit.dist < tHit.dist)) tHit = eHit;
+    const trHit = enemyTrain?.active ? enemyTrain.raycast(origin, dir, tDist ?? 6000) : null;
+    if (trHit && (!tHit || trHit.dist < tHit.dist)) tHit = trHit;
     if (tHit && (tDist == null || tHit.dist < tDist)) return { dist: tHit.dist, target: tHit.target };
     return tDist == null ? null : { dist: tDist };
   };
@@ -153,16 +157,21 @@ async function init() {
     const e = enemies?.segmentHit(a, b);
     if (t && (!e || t.point.distanceToSquared(a) <= e.point.distanceToSquared(a))) return { kind: 'target', target: t.target, point: t.point };
     if (e) return { kind: 'enemy', target: e.target, point: e.point, part: e.part };
+    if (enemyTrain?.active) {
+      const h = enemyTrain.segmentHit(a, b);
+      if (h) return { kind: 'etrain', target: h.car, point: h.point, local: h.local, normal: h.normal };
+    }
     return null;
   };
   const projectiles = new Projectiles(scene, terrain, hitTest, (p, point, hit, normal) => {
     if (p.side === 'enemy' && p.kind === 'shell') {
-      // 敵砲彈：爆炸、破片
-      effects.explosion(point, 0.55);
-      audio.play('explosion', point, 1);
-      if (normal) effects.crater(point, normal, 2);
+      // 敵砲彈：爆炸、破片（尖鋭弾只有小爆炸）
+      const he = p.shell.he;
+      effects.explosion(point, he ? 0.6 : 0.25);
+      audio.play('explosion', point, he ? 1 : 0.6);
+      if (normal) effects.crater(point, normal, he ? 2 : 1);
       if (hit?.kind === 'train') damage.onTrainHit(hit.target, hit.local, hit.normal, p);
-      damage.splash(point);
+      if (he) damage.splash(point);
       return;
     }
     if (p.side === 'enemy') {
@@ -173,6 +182,13 @@ async function init() {
       return;
     }
     const target = hit?.kind === 'target' ? hit.target : null;
+    if (hit?.kind === 'etrain') {
+      const r = enemyTrain.applyHit(hit.target, hit.local, hit.normal, p);
+      if (p.kind === 'shell') {
+        game.stats.hits++;
+        game.message(r.pen ? `擊穿敵${hit.target.role}！` : `命中敵${hit.target.role}，未擊穿`, r.pen ? '' : 'radio');
+      }
+    }
     if (p.kind === 'shell') {
       const he = p.shell.he;
       effects.explosion(point, he ? 1 : 0.45);
@@ -234,7 +250,8 @@ async function init() {
   damage = new Damage(game, train, crew);
   crewAI = new CrewAI(game, crew, stations, enemies, terrain);
   battery = new EnemyBattery(scene, terrain, train, models, game);
-  Object.assign(game, { enemies, damage, crew, crewAI, battery });
+  enemyTrain = new EnemyTrain(scene, track, mats, models, game);
+  Object.assign(game, { enemies, damage, crew, crewAI, battery, enemyTrain });
 
   // 第一關教學
   tutorial = new Tutorial(
@@ -323,7 +340,7 @@ async function init() {
   });
 
   function briefOf(id) {
-    return id === 1 ? briefingHtml() : id === 3 ? level3BriefHtml() : id === 4 ? level4BriefHtml() : level2BriefHtml();
+    return { 1: briefingHtml, 2: level2BriefHtml, 3: level3BriefHtml, 4: level4BriefHtml, 5: level5BriefHtml }[id]();
   }
 
   // 開始關卡：1＝教學（可略過）、2＝沿線巡邏、3＝斷軌
@@ -340,7 +357,7 @@ async function init() {
     targets.clear();
     document.getElementById('score').classList.add('hidden');
     mission = new MissionRunner(missionCtx);
-    mission.start({ 2: LEVEL2, 3: LEVEL3, 4: LEVEL4 }[id]);
+    mission.start({ 2: LEVEL2, 3: LEVEL3, 4: LEVEL4, 5: LEVEL5 }[id]);
   }
   const missionCtx = {
     game,
@@ -358,6 +375,9 @@ async function init() {
     railBreak,
     get battery() {
       return battery;
+    },
+    get enemyTrain() {
+      return enemyTrain;
     },
     mortar: stations.find((s) => s.type === 'mortar'),
     radio: (who, text) => game.message(`${who}：「${text}」`, 'radio'),
@@ -616,6 +636,7 @@ async function init() {
       crew.update(dt);
       enemies.update(dt);
       battery.update(dt);
+      enemyTrain.update(dt);
       crewAI.update(dt);
       damage.update(dt);
       tutorial.update(dt);
@@ -638,14 +659,14 @@ async function init() {
     const steps = (n, dt = 1 / 60) => {
       for (let i = 0; i < n; i++) step(dt);
     };
-    window.__game = { game, camera, renderer, scene, stations, player, train, targets, steps, railBreak, input, damage, battery, guide, openGuide, closeGuide, tutorial, get mission() { return mission; } };
+    window.__game = { game, camera, renderer, scene, stations, player, train, targets, steps, railBreak, input, damage, battery, enemyTrain, guide, openGuide, closeGuide, tutorial, get mission() { return mission; } };
   }
 
   ui.loading.classList.add('hidden');
   // 開場：關卡選單（網址帶 ?level=N 時直接顯示該關簡報）
   const lv = +new URLSearchParams(location.search).get('level');
   if (lv === 1) ui.openModal('briefing', briefingHtml());
-  else if (lv >= 2 && lv <= 4) ui.openModal('briefing', briefOf(lv));
+  else if (lv >= 2 && lv <= 5) ui.openModal('briefing', briefOf(lv));
   else ui.openModal('menu', menuHtml(LEVELS, loadProgress()));
   frame();
 }

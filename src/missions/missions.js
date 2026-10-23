@@ -7,7 +7,7 @@ export const LEVELS = [
   { id: 2, name: '沿線巡邏', sub: '指揮軍士擊退騎兵與步兵的襲擾，抵達終點站', ready: true },
   { id: 3, name: '斷軌', sub: '工兵炸毀鐵軌，在敵火下下車搶修', ready: true },
   { id: 4, name: '山谷伏擊', sub: '敵軍躲在稜線後，以迫砲與觀測修正反擊', ready: true },
-  { id: 5, name: '鋼鐵對決', sub: '迎戰敵方裝甲列車', ready: false },
+  { id: 5, name: '鋼鐵對決', sub: '迎戰敵方裝甲列車', ready: true },
 ];
 
 const PROGRESS_KEY = 'armoredTrain.progress';
@@ -310,6 +310,59 @@ export const LEVEL4 = {
   rankNote: '評等依乘員傷亡、預備士兵、車廂被擊穿次數與完成時間計算（12 分鐘內、零傷亡、未被擊穿才有 S）。',
 };
 
+// ── 第五關：鋼鐵對決 ──
+export const LEVEL5 = {
+  id: 5,
+  title: '鋼鐵對決',
+  intro: [
+    ['本部', '急電！敵方裝甲列車一列自東方沿試驗線駛來，命你部迎擊，確保鐵道。'],
+    ['副官', '敵車也有十糎級火砲。榴弾打不穿裝甲，對付敵車要用尖鋭弾；砲手接到砲擊敵車的命令時會自動改用尖鋭弾。'],
+    ['副官', '先用測距儀或觀測鏡標記敵車，再按 C 下令兩門十糎砲「砲擊選定目標」。也可以親自上砲。'],
+  ],
+  phases: [
+    {
+      text: '以傳令鐘下令「微速」以上，向東出發',
+      done: (c) => c.train.acknowledged >= 2,
+    },
+    {
+      text: '前進至里程 0.9 km',
+      done: (c) => c.train.sFront >= 900,
+    },
+    {
+      enter: (c) => {
+        c.enemyTrain.spawn({ s: c.train.track.length - 60, standoff: 1700 });
+        c.radio('觀測哨', '東方鐵道上出現敵裝甲列車！距離約 2,300 m，正向我方駛來！');
+        setTimeout(() => c.radio('副官', '建議停車迎戰：行進間射擊很難命中。'), 3500);
+      },
+      text: (c) => `擊毀敵裝甲列車（砲車 ${c.enemyTrain.gunsDestroyed}／2・全車 ${c.enemyTrain.carsDestroyed}／4）`,
+      hint: '① 停車　② 到火砲車丙測距儀（按 4）測距，或在指揮台觀測鏡標記敵車　③ 按 C 下令甲砲、乙砲「砲擊選定目標」，或親自操作十糎砲（1 鍵尖鋭弾）　④ 兩節砲車都擊毀、或任意 3 節被毀，敵車就失去戰鬥力。正面對峙時後砲車會被前面的車擋住；擊毀敵指揮車可降低敵砲修正速度。目標被毀後要重新標記下一節。我方移動 50 m 以上，敵砲要重新試射。',
+      done: (c, st, dt) => {
+        // 第一節砲車被毀後，敵騎兵從南方襲擾
+        if (!st.cav && c.enemyTrain.gunsDestroyed >= 1) {
+          c.radio('觀測哨', '南方有敵騎兵趁機逼近！');
+          st.cav = c.enemies.spawnCavalry({ x: Math.min(trainX(c) + 300, 1450), side: 1, dist: 750, count: 10, name: '南方敵騎兵' });
+        }
+        return c.enemyTrain.beaten;
+      },
+    },
+    {
+      enter: (c) => c.radio('本部', '敵裝甲列車已失去戰鬥力！幹得好！請擊退殘敵後停車待命。'),
+      text: (c, st) => `肅清殘敵，停車待命${c.enemies.units.some((u) => !unitDone(u)) ? '（仍有敵部隊）' : ''}`,
+      done: (c) => c.enemies.units.every((u) => unitDone(u)) && Math.abs(c.train.speed) < 0.2,
+    },
+  ],
+  fail: (c) => (c.damage.penetrations >= 16 ? '列車遭敵砲擊穿過多，失去戰鬥力' : null),
+  rank(stats) {
+    let score = 100;
+    score -= stats.crewLost * 6;
+    score -= stats.reservesUsed * 15;
+    score -= stats.penetrations * 3;
+    score -= Math.max(0, stats.minutes - 12) * 4;
+    return score >= 94 ? 'S' : score >= 75 ? 'A' : score >= 60 ? 'B' : score >= 40 ? 'C' : 'D';
+  },
+  rankNote: '評等依乘員傷亡、預備士兵、車廂被擊穿次數與完成時間計算（12 分鐘內、零傷亡、被擊穿 2 次以下才有 S）。',
+};
+
 // 任務執行：依序推進階段，顯示目標，判定成功與失敗
 export class MissionRunner {
   constructor(ctx) {
@@ -407,6 +460,7 @@ export class MissionRunner {
         <tr><th>使用預備士兵</th><td>${stats.reservesUsed}</td></tr>
         <tr><th>${this.def.id === 4 ? '砲彈發射（十糎砲＋迫砲）' : '十糎砲發射'}</th><td>${c.game.stats.shots}</td></tr>
         ${this.def.id === 4 ? `<tr><th>擊毀敵迫砲</th><td>${c.battery.destroyed}／${c.battery.total}</td></tr>` : ''}
+        ${this.def.id === 5 ? `<tr><th>敵裝甲列車</th><td>${c.enemyTrain.statusText()}</td></tr>` : ''}
       </table>
       <p class="note">${this.def.rankNote}</p>
       <div class="brief-btns">

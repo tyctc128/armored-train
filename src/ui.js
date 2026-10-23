@@ -152,6 +152,25 @@ export function level2BriefHtml() {
   </div>`;
 }
 
+export function level5BriefHtml() {
+  return `
+  <h2>電報：第五關　鋼鐵對決</h2>
+  <div>第一裝甲列車隊 指揮官 收</div>
+  <div>敵方裝甲列車一列，自東方沿試驗線西進。命你部迎擊，<b>擊毀其砲車</b>，確保鐵道。</div>
+  <h3>情報</h3>
+  <div>敵車 4 節：前砲車、指揮車、機關車、後砲車。兩節砲車各有一門十糎級火砲，會逐發試射修正，尖鋭弾可以擊穿我方側甲。</div>
+  <div>敵車側甲約 20 mm：<b>榴弾打不穿，要用尖鋭弾</b>。<b>兩節砲車都擊毀、或任意 3 節被毀</b>，敵車就失去戰鬥力。擊毀敵指揮車，敵砲修正會變慢；擊毀機關車，敵車就動不了。</div>
+  <h3>砲戰要領</h3>
+  <div>① <b>停車射擊</b>：行進間很難命中。我方移動 50 m 以上，敵砲就得重新試射，可以用來擺脫敵砲的修正。</div>
+  <div>② <b>測距</b>：到火砲車丙的測距儀測敵車，或在指揮台觀測鏡標記（測距手會補上精確距離）。</div>
+  <div>③ <b>射擊</b>：按 <kbd>C</kbd> 下令甲砲、乙砲「砲擊選定目標」，砲手會用尖鋭弾並依彈著修正；也可以親自上砲（<kbd>1</kbd> 尖鋭弾）。</div>
+  <div class="note">車廂被擊穿 16 次即任務失敗；指揮官陣亡時由預備士兵接替（3 名）。12 分鐘內、零傷亡、被擊穿 2 次以下才有 S。</div>
+  <div class="brief-btns">
+    <button class="start-btn" data-goto="start:5">出發</button>
+    <button class="start-btn secondary" data-goto="menu">返回</button>
+  </div>`;
+}
+
 export function level4BriefHtml() {
   return `
   <h2>電報：第四關　山谷伏擊</h2>
