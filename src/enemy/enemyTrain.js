@@ -220,7 +220,7 @@ export class EnemyTrain {
     const cos = Math.max(0.2, Math.abs(dir.dot(nWorld)));
     const armor = (Math.abs(normal.y) > 0.5 ? ARMOR.roof : ARMOR.side) / cos;
     const he = proj.shell.he;
-    const penMm = he ? 15 : 120 * (speed / proj.shell.v0);
+    const penMm = he ? 15 : (proj.shell.penMm ?? 120) * (speed / proj.shell.v0);
     const pen = penMm > armor;
     const dmg = pen ? 45 + Math.random() * 20 : he ? 10 + Math.random() * 8 : 4;
     car.hp = Math.max(0, car.hp - dmg);

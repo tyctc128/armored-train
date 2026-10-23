@@ -377,7 +377,7 @@ function buildGunCar(mats, high) {
 function swapToModel(car, model) {
   const g = model.clone(true);
   const need = [];
-  if (car.gun) need.push('Turret', 'Elev', 'Recoil', 'Muzzle', 'Sight');
+  if (car.gun) need.push(...(car.gunNames ? [car.gunNames.turret, car.gunNames.elev] : ['Turret', 'Elev', 'Recoil', 'Muzzle', 'Sight']));
   for (const mg of car.mgs) need.push(...['Base', 'Yaw', 'Pitch', 'Muzzle', 'Sight'].map((p) => `MG_${mg.tag}_${p}`));
   if (car.rangefinder) need.push('RF_Yaw', 'RF_Anchor');
   if (car.console) need.push('ConsoleAnchor');
@@ -402,7 +402,23 @@ function swapToModel(car, model) {
     }
     if (o.name.startsWith('Wheelset')) car.wheels.push({ mesh: o, r: o.userData.radius ?? 0.43 });
   });
-  if (car.gun) {
+  if (car.gun && car.gunNames) {
+    // 補上後座、砲口與瞄準鏡節點（砲身沿搖架 +X）
+    const turret = nodes[car.gunNames.turret];
+    const elev = nodes[car.gunNames.elev];
+    turret.rotation.set(0, 0, 0);
+    elev.rotation.set(0, 0, 0);
+    const recoil = new THREE.Group();
+    for (const c of [...elev.children]) recoil.add(c);
+    elev.add(recoil);
+    const muzzle = new THREE.Object3D();
+    muzzle.position.set(car.gunNames.barrel, 0, 0);
+    recoil.add(muzzle);
+    const sight = new THREE.Object3D();
+    sight.position.set(0.3, elev.position.y + 0.3, -0.62);
+    turret.add(sight);
+    Object.assign(car.gun, { turret, elev, recoil, muzzle, sight });
+  } else if (car.gun) {
     Object.assign(car.gun, { turret: nodes.Turret, elev: nodes.Elev, recoil: nodes.Recoil, muzzle: nodes.Muzzle, sight: nodes.Sight });
   }
   for (const mg of car.mgs) {
@@ -426,7 +442,10 @@ function buildGunCarC(mats) {
   t.turret.rotation.y = Math.PI;
   t.elev.rotation.z = 8 * DEG;
   car.group.add(t.turret);
-  car.stations.push({ type: 'locked', x: -4.2, lat: 0, label: '八八式七糎野戦高射砲（M2 開放）' });
+  car.gun = t;
+  // Blender 模型只有 Turret7、Turret7_Elev 兩個節點，其餘（Recoil、Muzzle、Sight）換模型後補上
+  car.gunNames = { turret: 'Turret7', elev: 'Turret7_Elev', barrel: 3.5 };
+  car.stations.push({ type: 'gun', weapon: 'type88', x: -4.2, lat: 0, label: '火砲車丙 八八式七糎野戦高射砲', ref: t });
 
   // 測距儀
   const rx = 3.6;

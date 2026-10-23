@@ -64,9 +64,27 @@ export class UI {
   }
 }
 
-export function helpHtml() {
+// 各車廂崗位一覽（由列車資料產生）
+const STATION_NAME = { gun: '火砲', mg: '機槍', console: '指揮台（傳令鐘＋觀測鏡）', rangefinder: '測距儀', mortar: '迫砲' };
+function stationTable(train) {
+  if (!train) return '';
+  const rows = train.cars
+    .map((car, i) => {
+      const items = car.stations
+        .filter((s) => STATION_NAME[s.type])
+        .map((s) => (s.type === 'gun' || s.type === 'mortar' ? s.label.replace(/^\S+\s/, '') : s.type === 'mg' ? s.label.replace(/^\S+\s/, '') : STATION_NAME[s.type]));
+      return `<tr><td><kbd>${i + 1}</kbd> ${car.name}</td><td>${items.length ? items.join('、') : '—（只能通過）'}</td></tr>`;
+    })
+    .join('');
+  return `<h3>各車廂崗位一覽（數字鍵自動前往）</h3>
+  <table class="stations"><thead><tr><th>車廂</th><th>可操作的崗位</th></tr></thead><tbody>${rows}</tbody></table>
+  <div class="note">走近崗位時，畫面上會浮出彩色標籤（砲＝火砲、槍＝機槍、指＝觀測鏡與傳令鐘、測＝測距儀、迫＝迫砲）；靠近到可以操作時標籤會變亮，顯示「按 E 上崗」。</div>`;
+}
+
+export function helpHtml(train) {
   return `
   <h2>操作說明</h2>
+  ${stationTable(train)}
   <div class="cols">
     <div>
       <h3>角色移動</h3>
@@ -95,9 +113,9 @@ export function helpHtml() {
       <div>左鍵測距，結果記入目標簿；誤差隨距離增加</div>
     </div>
     <div>
-      <h3>十糎砲（火砲車甲、乙）</h3>
+      <h3>十糎砲（火砲車甲、乙）・七糎砲（火砲車丙）</h3>
       <div>滑鼠或方向鍵：方向／俯仰（有最大轉速）</div>
-      <div><kbd>1</kbd> 尖鋭弾　<kbd>2</kbd> 榴弾　按住 <kbd>R</kbd> 裝填（約 25 秒，放開中斷）</div>
+      <div><kbd>1</kbd> 尖鋭弾　<kbd>2</kbd> 榴弾　按住 <kbd>R</kbd> 裝填（十糎約 25 秒、七糎約 5 秒，放開中斷）</div>
       <div>滾輪／<kbd>PgUp</kbd><kbd>PgDn</kbd> 調表尺；左鍵擊發；右鍵倍率</div>
       <div><kbd>[</kbd><kbd>]</kbd> 切換目標簿選定目標</div>
     </div>

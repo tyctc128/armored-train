@@ -6,7 +6,7 @@ import { Track } from './world/track.js';
 import { Terrain } from './world/terrain.js';
 import { buildScenery } from './world/scenery.js';
 import { setupEnvironment } from './world/environment.js';
-import { createMaterials } from './train/carModels.js';
+import { createMaterials, FLOOR_Y } from './train/carModels.js';
 import { Train, NOTCHES } from './train/train.js';
 import { loadModels } from './train/models.js';
 import { TrainMap } from './trainMap.js';
@@ -78,7 +78,7 @@ async function init() {
   for (const w of Object.values(WEAPONS)) {
     w.C = calibrateDrag(w.shells[0].v0, w.maxRange);
   }
-  WEAPONS.type14.tables = Object.fromEntries(WEAPONS.type14.shells.map((s) => [s.id, buildFiringTable(WEAPONS.type14, s)]));
+  for (const w of [WEAPONS.type14, WEAPONS.type88]) w.tables = Object.fromEntries(w.shells.map((s) => [s.id, buildFiringTable(w, s)]));
   WEAPONS.type97.table = buildMortarTable(WEAPONS.type97, WEAPONS.type97.shells[0]);
 
   ui.setLoading('載入車廂模型…');
@@ -230,7 +230,7 @@ async function init() {
   for (const car of train.cars) {
     const pool = { rounds: WEAPONS.type92.poolPerCar };
     for (const s of car.stations) {
-      if (s.type === 'gun') s.obj = new GunStation(game, car, s.ref, s.label);
+      if (s.type === 'gun') s.obj = new GunStation(game, car, s.ref, s.label, WEAPONS[s.weapon ?? 'type14']);
       else if (s.type === 'mg') s.obj = new MgStation(game, car, s.ref, pool);
       else if (s.type === 'console') s.obj = new ConsoleStation(game, car, s.ref);
       else if (s.type === 'rangefinder') s.obj = new RangefinderStation(game, car, s.ref);
@@ -303,10 +303,13 @@ async function init() {
     openGuide();
   });
 
+  // 射表手冊：在七糎砲崗位時顯示七糎砲的射表，其餘顯示十糎砲
+  const tableWeapon = () => (game.station?.type === 'gun' ? game.station.w : WEAPONS.type14);
+
   function openModal(name) {
     let html = '';
-    if (name === 'help') html = helpHtml();
-    if (name === 'table') html = game.station?.type === 'mortar' ? mortarTableHtml(WEAPONS.type97) : firingTableHtml(WEAPONS.type14, game.tableShell);
+    if (name === 'help') html = helpHtml(train);
+    if (name === 'table') html = game.station?.type === 'mortar' ? mortarTableHtml(WEAPONS.type97) : firingTableHtml(tableWeapon(), game.tableShell);
     if (name === 'book') html = targetBookHtml(game.targetBook, game.time);
     ui.openModal(name, html);
     input.unlock();
@@ -321,7 +324,7 @@ async function init() {
     if (!b) return;
     if (b.dataset.shell) {
       game.tableShell = b.dataset.shell;
-      ui.modalBody.innerHTML = firingTableHtml(WEAPONS.type14, game.tableShell);
+      ui.modalBody.innerHTML = firingTableHtml(tableWeapon(), game.tableShell);
     }
     if (b.id === 'start-btn' || b.id === 'free-btn') startLevel(1, b.id === 'start-btn');
     if (b.id === 'debrief-btn') closeModal(true);
@@ -605,6 +608,92 @@ async function init() {
     if (game.mode === 'station' && game.station.drawOverlay) {
       game.station.drawOverlay(g2d, overlay.width, overlay.height, camera);
     }
+    if (game.mode === 'walk' && game.started) drawStationTags();
+  }
+
+  // ── 崗位標籤：走近時浮在崗位上方，最近可操作的會強調「按 E」──
+  const TAG = {
+    gun: ['砲', '火砲', '#e0b25a'],
+    mg: ['槍', '機槍', '#d8d2b8'],
+    console: ['指', '觀測・指揮', '#7fb6e0'],
+    rangefinder: ['測', '測距', '#7fb6e0'],
+    mortar: ['迫', '迫砲', '#e0b25a'],
+    locked: ['鎖', '未開放', '#8a8676'],
+  };
+  const tagPos = new THREE.Vector3();
+  function drawStationTags() {
+    const it = nearestInteractable();
+    const W = overlay.width;
+    const H = overlay.height;
+    const tags = [];
+    for (const car of train.cars) {
+      for (const s of car.stations) {
+        const t = TAG[s.type];
+        if (!t) continue;
+        tagPos.set(s.x, FLOOR_Y + 1.75, s.lat).applyMatrix4(car.group.matrixWorld);
+        const d = tagPos.distanceTo(camera.position);
+        if (d > 11) continue;
+        tagPos.project(camera);
+        if (tagPos.z > 1 || Math.abs(tagPos.x) > 1.1 || Math.abs(tagPos.y) > 1.1) continue;
+        tags.push({ s, t, d, x: (tagPos.x * 0.5 + 0.5) * W, y: (-tagPos.y * 0.5 + 0.5) * H, near: it?.kind === 'station' && it.s === s });
+      }
+    }
+    tags.sort((a, b) => b.d - a.d);
+    for (const { s, t, d, x, y, near } of tags) {
+      const alpha = near ? 1 : clamp(1.15 - (d - 3) / 8, 0.25, 0.95);
+      const name = s.label.replace(/^(警戒車|火砲車[甲乙丙]|指揮車|炭水車|電源車|機關車)\s*/, '');
+      const text = near ? `${t[1]}｜${name}　按 E 上崗` : `${t[1]}｜${name}`;
+      g2d.save();
+      g2d.globalAlpha = alpha;
+      g2d.font = `${near ? 'bold 15px' : '13px'} "Microsoft JhengHei", sans-serif`;
+      const tw = g2d.measureText(text).width;
+      const bw = tw + 34;
+      const bh = near ? 28 : 24;
+      const bx = x - bw / 2;
+      const by = y - bh;
+      g2d.fillStyle = 'rgba(18,20,14,0.82)';
+      g2d.strokeStyle = t[2];
+      g2d.lineWidth = near ? 2.5 : 1.2;
+      g2d.beginPath();
+      g2d.roundRect(bx, by, bw, bh, 5);
+      g2d.fill();
+      g2d.stroke();
+      // 圖示
+      g2d.fillStyle = t[2];
+      g2d.beginPath();
+      g2d.arc(bx + 13, by + bh / 2, 9, 0, Math.PI * 2);
+      g2d.fill();
+      g2d.fillStyle = '#1b1d15';
+      g2d.textAlign = 'center';
+      g2d.textBaseline = 'middle';
+      g2d.font = 'bold 11px "Microsoft JhengHei", sans-serif';
+      g2d.fillText(t[0], bx + 13, by + bh / 2 + 0.5);
+      g2d.fillStyle = near ? '#ffe7a8' : '#e8e3cf';
+      g2d.textAlign = 'left';
+      g2d.font = `${near ? 'bold 15px' : '13px'} "Microsoft JhengHei", sans-serif`;
+      g2d.fillText(text, bx + 26, by + bh / 2 + 0.5);
+      // 指向崗位的小三角
+      g2d.fillStyle = t[2];
+      g2d.beginPath();
+      g2d.moveTo(x - 5, by + bh);
+      g2d.lineTo(x + 5, by + bh);
+      g2d.lineTo(x, by + bh + 6);
+      g2d.fill();
+      g2d.restore();
+    }
+  }
+
+  // 走進有崗位的車廂時，列出這節車可以操作的崗位
+  let lastCar = null;
+  function announceCar() {
+    if (game.mode !== 'walk' || player.level === 'ground') return;
+    const w = player.where();
+    if (!w || w.inGap || w.car === lastCar) return;
+    lastCar = w.car;
+    const count = {};
+    for (const s of w.car.stations) if (TAG[s.type]) count[TAG[s.type][1]] = (count[TAG[s.type][1]] ?? 0) + 1;
+    const list = Object.entries(count).map(([n, c]) => (c > 1 ? `${n}×${c}` : n));
+    game.message(list.length ? `${w.car.name}：可操作 ${list.join('、')}（走近會顯示標籤）` : `${w.car.name}：沒有可操作的崗位`);
   }
 
   // ── 主迴圈 ──
@@ -643,6 +732,7 @@ async function init() {
       damage.update(dt);
       tutorial.update(dt);
       mission?.update(dt);
+      if (game.started) announceCar();
       audio.updateEngine(dt, train.speed, loco.chimney.getWorldPosition(locoPos));
     }
     applyCamera();

@@ -47,6 +47,49 @@ function scopeMask(g, W, H, r) {
   g.stroke();
 }
 
+// 畫面上方的方位刻度帶：目前方位（密位）與左右刻度
+function bearingTape(g, W, camera) {
+  const dir = _d.set(0, 0, -1).applyQuaternion(camera.quaternion);
+  const b = bearingMil(dir.x, dir.z);
+  const ppm = pxPerMil(camera, g.canvas.height);
+  const cx = W / 2;
+  const half = 200;
+  g.save();
+  g.fillStyle = 'rgba(18,20,14,0.75)';
+  g.fillRect(cx - half, 8, half * 2, 40);
+  g.beginPath();
+  g.rect(cx - half, 8, half * 2, 40);
+  g.clip();
+  // 刻度：依畫面比例決定間距（每格至少約 8 px）
+  const step = [10, 50, 100, 200, 400].find((m) => m * ppm >= 8) ?? 400;
+  const label = step * 4;
+  g.strokeStyle = '#c9c3a8';
+  g.fillStyle = '#c9c3a8';
+  g.font = '11px sans-serif';
+  g.textAlign = 'center';
+  const first = Math.ceil((b - half / ppm) / step) * step;
+  for (let m = first; m <= b + half / ppm; m += step) {
+    const x = cx + (m - b) * ppm;
+    const big = m % label === 0;
+    g.beginPath();
+    g.moveTo(x, 48);
+    g.lineTo(x, big ? 38 : 43);
+    g.stroke();
+    if (big) g.fillText(fmtMil(m), x, 34);
+  }
+  g.restore();
+  g.fillStyle = '#e0b25a';
+  g.beginPath();
+  g.moveTo(cx, 46);
+  g.lineTo(cx - 6, 54);
+  g.lineTo(cx + 6, 54);
+  g.fill();
+  g.font = 'bold 15px sans-serif';
+  g.textAlign = 'center';
+  g.fillStyle = '#e8e3cf';
+  g.fillText(`方位 ${fmtMil(b)} 密位`, cx, 24);
+}
+
 function shake(camera, amount) {
   if (amount <= 0) return;
   camera.rotateX((Math.random() - 0.5) * amount);
@@ -55,13 +98,13 @@ function shake(camera, amount) {
 
 // ─────────────────────────────── 十糎砲 ───────────────────────────────
 export class GunStation {
-  constructor(game, car, gun, label) {
+  constructor(game, car, gun, label, weapon = WEAPONS.type14) {
     this.type = 'gun';
     this.game = game;
     this.car = car;
     this.gun = gun;
     this.label = label;
-    this.w = WEAPONS.type14;
+    this.w = weapon;
     this.yaw = 0;
     this.elev = 1 * DEG;
     this.drum = 0;
@@ -561,9 +604,17 @@ export class MgStation {
     if (this.cool > 0 && this.game.input.btn(0) && this.strip > 0) shake(camera, 0.003);
   }
 
-  drawOverlay(g, W, H) {
+  // 槍口方位（密位）
+  azimuthMil() {
+    this.mg.pitchG.getWorldQuaternion(_q);
+    _v.set(1, 0, 0).applyQuaternion(_q);
+    return bearingMil(_v.x, _v.z);
+  }
+
+  drawOverlay(g, W, H, camera) {
     const cx = W / 2;
     const cy = H / 2;
+    bearingTape(g, W, camera);
     g.strokeStyle = 'rgba(20,20,15,0.9)';
     g.lineWidth = 2;
     g.beginPath();
@@ -587,6 +638,7 @@ export class MgStation {
     const heatCls = this.overheat ? 'warn' : this.heat > 70 ? 'acc' : 'k';
     return `
       <div class="acc">${this.label}（九二式重機関銃）</div>
+      <div><span class="k">方位</span> <b>${fmtMil(this.azimuthMil())}</b> 密位</div>
       <div><span class="k">保彈板</span> <b>${this.strip}</b>/${this.w.stripSize}　<span class="k">本車存彈</span> ${this.pool.rounds}</div>
       ${this.reload > 0 ? `換彈中 <div class="bar"><i style="width:${(this.reload * 100).toFixed(0)}%"></i></div>` : ''}
       <div><span class="${heatCls}">槍管溫度 ${Math.round(this.heat)}%${this.overheat ? '（過熱）' : ''}</span></div>

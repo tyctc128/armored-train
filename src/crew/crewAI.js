@@ -75,7 +75,7 @@ export class CrewAI {
     const o = this.orders;
     const rows = [
       ['1', '機槍（全車）', o.mg === 'free' ? '自由射擊' : '停止射擊'],
-      ...this.guns.map((st, i) => [String(i + 2), `${st.car.name}十糎砲`, GUN_MODE_NAME[o.guns[st.car.kind]]]),
+      ...this.guns.map((st, i) => [String(i + 2), `${st.car.name}${st.w.short}`, GUN_MODE_NAME[o.guns[st.car.kind]]]),
       [String(this.guns.length + 2), '全員停火', ''],
       [String(this.guns.length + 3), '測距手', o.rf ? '自動測距' : '待命'],
     ];

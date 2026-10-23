@@ -163,3 +163,9 @@ html, body {
   font-weight: 700;
   cursor: pointer;
 }
+
+/* 說明頁：各車廂崗位一覽 */
+#modal table.stations th,
+#modal table.stations td {
+  text-align: left;
+}

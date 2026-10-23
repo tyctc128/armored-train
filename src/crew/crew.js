@@ -46,6 +46,12 @@ export class Crew {
           const bp = st.ref.base.position;
           this.add(car, { variant: 'soldier', name: nextName('機槍手'), x: bp.x - Math.cos(yaw) * 0.62, z: bp.z + Math.sin(yaw) * 0.62, yaw, pose: 'operate', station: st.obj,
             lines: ['射界內無敵蹤！', '保彈板充足！', '隨時可以射擊！'] });
+        } else if (st.type === 'gun' && car.kind === 'gunC') {
+          // 敞頂七糎砲塔內的砲組（暴露位置）：砲手操砲、另一人裝填
+          this.add(car, { variant: 'soldier', name: nextName('七糎砲手'), x: st.x + 0.4, z: -0.7, y: car.roofY + 0.22, yaw: Math.PI, pose: 'operate', exposed: true, station: st.obj,
+            lines: ['七糎砲待命！'] });
+          this.add(car, { variant: 'soldier', name: nextName('七糎裝填手'), x: st.x + 0.4, z: 0.7, y: car.roofY + 0.22, yaw: Math.PI, pose: 'operate', exposed: true, loader: st.obj,
+            lines: ['七糎彈備妥！'] });
         } else if (st.type === 'gun') {
           this.add(car, { variant: 'crew', name: nextName('砲手'), x: st.x - 0.25, z: -0.55, yaw: 0, pose: 'lookUp', station: st.obj,
             lines: ['十糎砲待命！', '榴弾已備妥！'] });
@@ -54,12 +60,6 @@ export class Crew {
         } else if (st.type === 'rangefinder') {
           this.add(car, { variant: 'crew', name: nextName('測距手'), x: st.x - 0.1, z: 0.45, yaw: 0, pose: 'lookUp', station: st.obj,
             lines: ['測距儀已校正！', '標記目標後我會精確測距。'] });
-        } else if (st.type === 'locked' && car.kind === 'gunC') {
-          // 敞頂七糎砲塔內的砲組（暴露位置）
-          for (const dz of [-0.7, 0.7]) {
-            this.add(car, { variant: 'soldier', name: nextName('七糎砲手'), x: st.x + 0.4, z: dz, y: car.roofY + 0.22, yaw: Math.PI, pose: 'operate', exposed: true,
-              lines: ['七糎砲待命！'] });
-          }
         } else if (st.type === 'mortar') {
           // 敞頂迫砲座的砲組（暴露位置）：分站迫砲座兩端，不擋指揮官從砲後方瞄準
           for (const [dx, dz, yaw] of [[-2.2, -0.95, 0], [0.9, 0.95, Math.PI]]) {

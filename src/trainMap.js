@@ -110,10 +110,11 @@ export class TrainMap {
           g.lineTo(sx - 3.5, up ? CY - CAR_H / 2 + 2 : CY + CAR_H / 2 - 2);
           g.lineTo(sx + 3.5, up ? CY - CAR_H / 2 + 2 : CY + CAR_H / 2 - 2);
           g.fill();
-        } else if (s.type === 'console' || s.type === 'rangefinder') {
-          g.fillStyle = active ? '#e0b25a' : '#7fb6e0';
+        } else if (s.type === 'console' || s.type === 'rangefinder' || s.type === 'mortar') {
+          g.fillStyle = active ? '#e0b25a' : s.type === 'mortar' ? '#e0b25a' : '#7fb6e0';
           g.font = 'bold 10px "Microsoft JhengHei", sans-serif';
-          g.fillText(s.type === 'console' ? '指' : '測', sx, sy + 4);
+          g.textAlign = 'center';
+          g.fillText({ console: '指', rangefinder: '測', mortar: '迫' }[s.type], sx, sy + 4);
         } else {
           g.strokeStyle = 'rgba(201, 195, 168, 0.5)';
           g.beginPath();
@@ -130,6 +131,15 @@ export class TrainMap {
     g.fillText('車頭 ▶', W - PAD, 14);
     g.textAlign = 'left';
     g.fillText(`${(t.speed * 3.6).toFixed(0)} km/h`, PAD, 14);
+    // 圖例
+    g.textAlign = 'center';
+    g.font = '10px "Microsoft JhengHei", sans-serif';
+    g.fillStyle = '#c9c3a8';
+    g.fillText('●火砲　▲機槍', W / 2 - 52, 14);
+    g.fillStyle = '#7fb6e0';
+    g.fillText('指觀測　測測距', W / 2 + 22, 14);
+    g.fillStyle = '#e0b25a';
+    g.fillText('迫迫砲', W / 2 + 80, 14);
 
     // 玩家
     if (mode !== 'third' || here) {

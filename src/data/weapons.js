@@ -21,6 +21,24 @@ export const WEAPONS = {
       { id: 'HE', name: '榴弾', mass: 15.8, v0: 700, form: 1.07, he: true },
     ],
   },
+  type88: {
+    id: 'type88',
+    name: '八八式七糎野戦高射砲',
+    short: '七糎砲',
+    maxRange: 13800,
+    reloadTime: 5, // 雙聯、彈較輕，約 5 秒一發
+    traverseRate: 14 * DEG,
+    elevRate: 9 * DEG,
+    elevMin: 0,
+    elevMax: 85 * DEG,
+    dispersionMil: 0.4,
+    wearPerRound: 0.00005,
+    stock: { AP: 60, HE: 100 },
+    shells: [
+      { id: 'AP', name: '尖鋭弾', mass: 6.2, v0: 720, form: 1.0, he: false, penMm: 75 },
+      { id: 'HE', name: '榴弾', mass: 6.6, v0: 720, form: 1.08, he: true },
+    ],
+  },
   type92: {
     id: 'type92',
     name: '九二式重機関銃',
