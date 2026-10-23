@@ -22,14 +22,24 @@ function pxPerMil(camera, H) {
   return H / 2 / Math.tan((camera.fov * DEG) / 2) / MIL_PER_RAD;
 }
 
-function scopeMask(g, W, H, r) {
+// 鏡筒遮罩：整個畫面塗黑，再挖掉鏡孔（addHoles 畫出各個孔；孔可以互相重疊）
+function maskWithHoles(g, W, H, alpha, addHoles) {
   g.save();
-  g.fillStyle = 'rgba(0,0,0,0.92)';
+  g.fillStyle = `rgba(0,0,0,${alpha})`;
+  g.fillRect(0, 0, W, H);
+  g.globalCompositeOperation = 'destination-out';
+  g.fillStyle = '#000';
   g.beginPath();
-  g.rect(0, 0, W, H);
-  g.arc(W / 2, H / 2, r, 0, Math.PI * 2, true);
-  g.fill('evenodd');
+  addHoles(g);
+  g.fill();
   g.restore();
+}
+
+function scopeMask(g, W, H, r) {
+  maskWithHoles(g, W, H, 0.92, (c) => {
+    c.moveTo(W / 2 + r, H / 2);
+    c.arc(W / 2, H / 2, r, 0, Math.PI * 2);
+  });
   g.strokeStyle = 'rgba(0,0,0,0.9)';
   g.lineWidth = 6;
   g.beginPath();
@@ -607,7 +617,8 @@ export class ConsoleStation {
     const g = this.game;
     const sens = this.zoom ? 0.00025 : 0.0022;
     this.yaw -= input.mouseDX * sens;
-    this.pitch = clamp(this.pitch - input.mouseDY * sens, -0.6, 0.6);
+    // 指揮塔的觀察窗是水平一圈：只能略為俯仰（往下會看進車內）
+    this.pitch = clamp(this.pitch - input.mouseDY * sens, -0.2, 0.5);
     if (input.btnHit(2)) {
         this.zoom = !this.zoom;
         this.game.emit('zoom', { station: this, zoom: this.zoom });
@@ -645,14 +656,12 @@ export class ConsoleStation {
     if (this.zoom) {
       // 雙眼望遠鏡遮罩
       const r = Math.min(W, H) * 0.36;
-      g.save();
-      g.fillStyle = 'rgba(0,0,0,0.93)';
-      g.beginPath();
-      g.rect(0, 0, W, H);
-      g.arc(cx - r * 0.62, cy, r, 0, Math.PI * 2, true);
-      g.arc(cx + r * 0.62, cy, r, 0, Math.PI * 2, true);
-      g.fill('evenodd');
-      g.restore();
+      maskWithHoles(g, W, H, 0.93, (c) => {
+        for (const ox of [-r * 0.62, r * 0.62]) {
+          c.moveTo(cx + ox + r, cy);
+          c.arc(cx + ox, cy, r, 0, Math.PI * 2);
+        }
+      });
       const ppm = pxPerMil(camera, H);
       g.strokeStyle = 'rgba(10,10,8,0.9)';
       g.fillStyle = 'rgba(10,10,8,0.9)';
@@ -777,13 +786,10 @@ export class RangefinderStation {
     const cy = H / 2;
     const rw = Math.min(W * 0.8, 900);
     const rh = Math.min(H * 0.42, 300);
-    g.save();
-    g.fillStyle = 'rgba(0,0,0,0.93)';
-    g.beginPath();
-    g.rect(0, 0, W, H);
-    g.ellipse(cx, cy, rw / 2, rh / 2, 0, 0, Math.PI * 2, true);
-    g.fill('evenodd');
-    g.restore();
+    maskWithHoles(g, W, H, 0.93, (c) => {
+      c.moveTo(cx + rw / 2, cy);
+      c.ellipse(cx, cy, rw / 2, rh / 2, 0, 0, Math.PI * 2);
+    });
     g.strokeStyle = 'rgba(10,10,8,0.85)';
     g.lineWidth = 1.2;
     g.beginPath();
