@@ -106,7 +106,7 @@ export class EnemyBattery {
     // 發射煙：從稜線後冒出，可用觀測鏡看見
     this.game.effects.muzzleFlash(muzzle, vel.clone().normalize(), 1.0);
     this.game.effects.dust(muzzle.clone().setY(muzzle.y + 1), 1.2);
-    this.game.audio.play('cannon', muzzle, 0.6);
+    this.game.audio.play('cannon', muzzle, 0.6, 1.35);
     this.game.emit('enemyMortarFire', { gun: g });
   }
 

@@ -238,7 +238,7 @@ export class GunStation {
     g.projectiles.spawn({ pos: muzzle, vel, k: this.w.C * shell.form, kind: 'shell', shell, weapon: this.w, source: this });
     g.emit('gunFire', { station: this, shell: shell.id });
     g.effects.muzzleFlash(muzzle, dir, 2.2);
-    g.audio.play('cannon', muzzle, 1);
+    g.audio.play('cannon', muzzle, 1, this.w === WEAPONS.type88 ? 1.2 : 1);
     g.stats.shots++;
     this.rounds++;
     this.loaded = null;
@@ -478,7 +478,7 @@ export class MortarStation {
     const muzzle = this.muzzle(new THREE.Vector3());
     g.projectiles.spawn({ pos: muzzle, vel, k: this.w.C * shell.form, kind: 'shell', shell, weapon: this.w, source: this });
     g.effects.muzzleFlash(muzzle, vel.clone().normalize(), 1.2);
-    g.audio.play('cannon', muzzle, 0.55);
+    g.audio.play('cannon', muzzle, 0.55, 1.35);
     this.ammo.HE--;
     this.rounds++;
     g.stats.shots++;
@@ -569,7 +569,7 @@ export class MgStation {
       }
 
       if (input.down('KeyR') && this.strip < w.stripSize && this.pool.rounds > 0) {
-        if (this.reload === 0) g.audio.play('clank', this.mg.sight.getWorldPosition(_v), 0.5);
+        if (this.reload === 0) g.audio.play('mgReload', this.mg.sight.getWorldPosition(_v), 0.5);
         this.reload += dt / w.reloadTime;
         if (this.reload >= 1) {
           const need = Math.min(w.stripSize, this.pool.rounds + this.strip) - this.strip;

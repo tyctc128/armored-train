@@ -122,10 +122,11 @@ async function init() {
   const train = new Train(scene, track, mats, {
     message: game.message,
     bell: (ack) => audio.play('bell', train.cars[4].console.anchor.getWorldPosition(new THREE.Vector3()), ack ? 0.6 : 1),
+    whistle: () => audio.play('whistle', train.cars.find((c) => c.loco).chimney.getWorldPosition(new THREE.Vector3()), 0.9),
     derail: () => {
       const p = train.cars[0].group.position;
       effects.explosion(p, 0.5);
-      audio.play('explosion', p, 1.2);
+      audio.play('explosionBig', p, 1.2);
       game.message('列車衝過斷口，車頭出軌！', 'alert');
       game.emit('derailed');
     },

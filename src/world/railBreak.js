@@ -31,7 +31,7 @@ export class RailBreak {
     const r = new THREE.Vector3().crossVectors(t, UP).normalize();
     this.basis = { t, r };
     g.effects.explosion(this.pos, 1.4);
-    g.audio.play('explosion', this.pos, 1.5);
+    g.audio.play('explosionBig', this.pos, 1.5);
     g.effects.crater(this.pos.clone().setY(this.pos.y - 0.3), UP, 3.6);
     g.effects.smokeColumn(this.pos.clone().setY(this.pos.y + 0.5), 50, 0.6);
     this.build();
@@ -93,7 +93,7 @@ export class RailBreak {
     const before = this.progress;
     this.progress = Math.min(1, this.progress + (dt / REPAIR_TIME) * rate);
     // 敲擊聲：每完成 4% 一聲
-    if (Math.floor(before * 25) !== Math.floor(this.progress * 25)) this.game.audio.play('clank', this.pos, 0.9);
+    if (Math.floor(before * 25) !== Math.floor(this.progress * 25)) this.game.audio.play('hammer', this.pos, 0.9);
     if (this.progress >= 1) {
       this.fix();
       return true;

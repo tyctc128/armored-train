@@ -72,6 +72,8 @@ export class Train {
         this.pending = null;
         this.hooks.message(`司機：「${NOTCHES[this.acknowledged].name}，了解。」`, 'radio');
         this.hooks.bell(true);
+        // 從停車狀態發車時鳴汽笛
+        if (Math.abs(this.speed) < 0.5 && NOTCHES[this.acknowledged].v !== 0) this.hooks.whistle?.();
       }
     }
     if (this.derailed) {

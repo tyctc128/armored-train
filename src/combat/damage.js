@@ -84,7 +84,7 @@ export class Damage {
     this.penetrations++;
     g.effects.spark(point);
     g.effects.dust(point, 0.4);
-    g.audio.play('ping', point, 1.2);
+    g.audio.play('hit', point, 1.2);
     g.message(`${car.name}被擊穿！`, 'alert');
     this.crew.woundNear(car, local, 2.5, 0.5);
     // 玩家在同一節車附近

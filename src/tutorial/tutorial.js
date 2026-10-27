@@ -65,7 +65,7 @@ export class Tutorial {
     // 下一步的起始狀態現在就記錄，等待動畫期間玩家做的事也算數
     this.nextState = {};
     this.steps[this.index + 1]?.enter?.(this.ctx, this.nextState);
-    this.ctx.game.audio.play('bell', null, 0.35);
+    this.ctx.game.audio.play('ding', null, 0.35);
     this.panel.querySelector('.t-step')?.classList.add(skipped ? 'skip' : 'done');
     const next = this.steps[this.index + 1];
     if (!next || next.chapterIndex !== this.step.chapterIndex) {

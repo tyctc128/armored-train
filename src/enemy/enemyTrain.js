@@ -237,7 +237,7 @@ export class EnemyTrain {
     const p = car.group.position.clone();
     p.y += 3;
     g.effects.explosion(p, car.gun ? 1.2 : 0.8);
-    g.audio.play('explosion', p, 1.4);
+    g.audio.play('explosionBig', p, 1.4);
     g.effects.smokeColumn(p, 600, car.loco ? 1.4 : 1);
     if (car.gun) car.gun.elev.rotation.z = -0.05;
     g.emit('enemyCarDestroyed', { car });
