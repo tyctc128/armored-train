@@ -90,7 +90,7 @@ export function helpHtml(train) {
       <h3>角色移動</h3>
       <div><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 移動　<kbd>Shift</kbd> 快跑</div>
       <div>車內走道最快約 3 m/s；車頂、車外約 5 m/s，但屬<b>暴露位置</b></div>
-      <div><kbd>1</kbd>–<kbd>8</kbd> 自動走到第 1–8 節車廂（車頭起算，見右下角簡圖）；按 WASD 取消</div>
+      <div><kbd>1</kbd>–<kbd>8</kbd> 自動走到第 1–8 節車廂（車頭起算，見右下角簡圖；<kbd>8</kbd> 直接走到電源車迫砲位）；按 WASD 取消</div>
       <div><kbd>E</kbd> 上崗／離開崗位、經艙口上下車頂</div>
       <div>列車停止時，在車廂連接處按 <kbd>E</kbd> 下車；車外走到連接處旁按 <kbd>E</kbd> 上車</div>
       <div><kbd>V</kbd> 第三人稱列車鏡頭（只能看）</div>

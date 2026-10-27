@@ -214,9 +214,12 @@ export class Player {
       onMessage?.('車頂上無法自動移動，請先經艙口回到車內', 'alert');
       return;
     }
-    const a = car.offset + car.len / 2;
-    this.auto = { index, a, lat: this.preferredLat(a), name: car.name, stuck: 0 };
-    onMessage?.(`自動前往：${car.name}（按 WASD 取消）`);
+    // 有指定位置的車廂（電源車：迫砲位）直接走到該處，其餘走到車廂中央
+    const spot = car.autoSpot;
+    const a = car.offset + car.len / 2 - (spot?.x ?? 0);
+    const name = spot ? `${car.name} ${spot.name}` : car.name;
+    this.auto = { index, a, lat: spot?.lat ?? this.preferredLat(a), name, stuck: 0 };
+    onMessage?.(`自動前往：${name}（按 WASD 取消）`);
   }
 
   cancelAuto(text) {

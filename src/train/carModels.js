@@ -699,6 +699,7 @@ function buildPower(mats) {
   car.group.add(mortar);
   car.mortar = { node: mortar };
   car.stations.push({ type: 'mortar', x: -4.0, lat: 0.6, label: '九七式曲射歩兵砲', ref: car.mortar });
+  car.autoSpot = { x: -4.0, lat: 0.6, name: '迫砲位' }; // 數字鍵 8 直接走到迫砲
 
   // 人字屋頂：只能沿屋脊走
   car.roofHalf = 0.6;
