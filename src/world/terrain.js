@@ -211,7 +211,10 @@ function winterGroundMaterial() {
         float bare = smoothstep(0.6, 0.78, tFbm(wp / 19.0 + 4.7));
         float dirtW = clamp(vSplat.r + bare * 0.55, 0.0, 1.0);
         float patch = smoothstep(0.56, 0.68, tFbm(wp / 27.0 + 11.3)) * smoothstep(0.35, 0.6, tFbm(wp / 140.0 + 2.0));
-        gSnowW = clamp(vSplat.g * 1.4 + patch * (1.0 - vSplat.r) * 0.85, 0.0, 1.0);
+        // 平地的殘雪只積在草叢之間，草尖仍會露出來
+        float tuft = dot(texture2D(map, wp / 5.0).rgb, vec3(0.333));
+        float thin = patch * (1.0 - vSplat.r) * 0.8 * (1.0 - smoothstep(0.1, 0.3, tuft) * mix(0.75, 0.35, farK));
+        gSnowW = clamp(vSplat.g * 1.4 + thin, 0.0, 1.0);
         vec3 ground = mix(grass, soil * vec3(0.82, 0.76, 0.68), dirtW);
         diffuseColor.rgb = mix(ground, snowC, gSnowW);`,
       )
