@@ -316,6 +316,40 @@ def tube(mb, rings, mi, segs=24):
             mb.bm.faces.new([a[i], b[i], b[j], a[j]]).material_index = mi
 
 
+def patch(mb, y0, y1, z0, z1, off, mi, n=5):
+    """貼著胸前曲面的一塊布（口袋、袋蓋）：在身體表面取樣後往外推 off，四周收邊。"""
+    grid = []
+    for i in range(n + 1):
+        y = y0 + (y1 - y0) * i / n
+        row = []
+        for j in range(n + 1):
+            z = z0 + (z1 - z0) * j / n
+            edge = i in (0, n) or j in (0, n)
+            row.append(mb.bm.verts.new(V(front_x(y, z, 0.022, 0.022) + (0.0 if edge else off), y, z)))
+        grid.append(row)
+    for i in range(n):
+        for j in range(n):
+            mb.bm.faces.new([grid[i][j], grid[i + 1][j], grid[i + 1][j + 1], grid[i][j + 1]]).material_index = mi
+
+
+def loft_x(mb, sections, mi, segs=14, floor=None):
+    """沿 X 方向放樣的橢圓截面 [(x, yc, zc, ry, rz)]；floor：低於此高度的點壓平（鞋底）。"""
+    rows = []
+    for x, yc, zc, ry, rz in sections:
+        row = []
+        for i in range(segs):
+            a = 2 * math.pi * i / segs
+            y = yc + math.sin(a) * ry
+            row.append(mb.bm.verts.new(V(x, y if floor is None else max(floor, y), zc + math.cos(a) * rz)))
+        rows.append(row)
+    for a, b in zip(rows[:-1], rows[1:]):
+        for i in range(segs):
+            j = (i + 1) % segs
+            mb.bm.faces.new([a[i], a[j], b[j], b[i]]).material_index = mi
+    mb.bm.faces.new(rows[0]).material_index = mi
+    mb.bm.faces.new(list(reversed(rows[-1]))).material_index = mi
+
+
 PARTS = []   # (物件, 綁定的骨頭)
 
 
@@ -361,9 +395,9 @@ for j in range(5):
 py = sh_y - 0.15
 for s in (-1, 1):
     fx = front_x(py, s * 0.09, 0.03, 0.04)
-    m.box((fx - 0.002, py, s * 0.09), (0.008, 0.1, 0.095), WOOL)
-    m.box((fx + 0.001, py + 0.04, s * 0.09), (0.008, 0.035, 0.1), WOOL)
-    m.lathe((fx + 0.005, py + 0.03, s * 0.09), (1, 0, 0), [(0, 0.007), (0.005, 0)], 8, BRS, cap0=False)
+    patch(m, py - 0.05, py + 0.05, s * 0.09 - 0.047, s * 0.09 + 0.047, 0.004, WOOL)      # 袋身
+    patch(m, py + 0.022, py + 0.058, s * 0.09 - 0.05, s * 0.09 + 0.05, 0.008, WOOL)       # 袋蓋
+    m.lathe((fx + 0.009, py + 0.03, s * 0.09), (1, 0, 0), [(0, 0.007), (0.005, 0)], 8, BRS, cap0=False)
 if VARIANT in ('soldier', 'enemy'):
     by = belt_y + 0.24
     bxk = back_x(by) - 0.065
@@ -396,13 +430,29 @@ for s in 'LR':
     x0, x1 = min(p.x for p in f), max(p.x for p in f)
     z0, z1 = min(p.z for p in f), max(p.z for p in f)
     zc = (z0 + z1) / 2
-    hw = min(0.043, (z1 - z0) / 2)
-    ax = JP['Ankle' + s].x
+    ax, az = JP['Ankle' + s].x, JP['Ankle' + s].z
+    L = x1 - x0
     m = MeshBuilder()
-    prism_z(m, [(x0 - 0.005, 0.0), (x1 - 0.005, 0.0), (x1, 0.03), (x1 - 0.04, 0.062), (ax + 0.055, 0.085),
-                (ax + 0.045, 0.165), (ax - 0.05, 0.165), (x0 - 0.008, 0.055)], zc - hw, zc + hw, BOOT)
-    prism_z(m, [(x0 - 0.014, 0.0), (x0 + 0.05, 0.0), (x0 + 0.05, 0.022), (x0 - 0.014, 0.022)], zc - hw - 0.003, zc + hw + 0.003, EYE)   # 鞋跟
-    part('Boot' + s, 'Ankle' + s, m, bevel=0.02)
+    # 鞋身：後跟圓、腳背隆起、鞋頭略收
+    loft_x(m, [(x0 - 0.004, 0.035, az, 0.03, 0.03), (x0 + 0.03, 0.045, az, 0.047, 0.04), (x0 + L * 0.42, 0.05, zc, 0.05, 0.045),
+               (x0 + L * 0.7, 0.038, zc, 0.04, 0.047), (x0 + L * 0.92, 0.03, zc, 0.031, 0.042), (x1 + 0.006, 0.024, zc, 0.02, 0.03)], BOOT, floor=0.012)
+    # 鞋底與鞋跟
+    loft_x(m, [(x0 - 0.006, 0.006, az, 0.007, 0.033), (x0 + L * 0.5, 0.006, zc, 0.007, 0.049), (x1 + 0.008, 0.006, zc, 0.007, 0.034)], EYE, floor=0.0)
+    m.box((x0 + 0.028, 0.008, az), (0.06, 0.018, 0.066), EYE)
+    # 靴筒（到腳踝上方，綁腿蓋在外面）
+    tube(m, [(0.05, ax - 0.005, az, 0.05, 0.043), (0.11, ax - 0.008, az, 0.046, 0.041), (0.17, ax - 0.01, az, 0.047, 0.043), (0.17, ax - 0.01, az, 0.03, 0.03)], BOOT, segs=14)
+    part('Boot' + s, 'Ankle' + s, m, bevel=0)
+    # 綁腿的纏繞紋：小腿上一圈圈略凸的布邊
+    calf = [p for p, r in CLOTH if r == 'Knee' + s]
+    if calf:
+        m = MeshBuilder()
+        ys = sorted(p.y for p in calf)
+        y = ys[0] + 0.05
+        while y < ys[-1] - 0.05:
+            c1, c2, r1, r2 = ring_at(y, 0.02, calf)
+            tube(m, [(y - 0.012, c1, c2, r1 + 0.001, r2 + 0.001), (y, c1, c2, r1 + 0.005, r2 + 0.005), (y + 0.004, c1, c2, r1 + 0.001, r2 + 0.001)], PUT, segs=14)
+            y += 0.042
+        part('Puttee' + s, 'Knee' + s, m, bevel=0)
 
 # ── 眼球 ──
 m = MeshBuilder()
@@ -507,9 +557,27 @@ if VARIANT in ('soldier', 'enemy'):
     m.cylinder((0, -0.45, -0.025), (0, 0.4, -0.025), 0.006, 6, LEA)                       # 背帶
     m.build('RifleMesh', MATS, parent=rifle, bevel=0.003)
 
+# ───────────────────────── 7. 把縫隙陰影烘焙到頂點色 ─────────────────────────
+# 眼窩、鼻翼、耳朵、帽簷下、腋下、裝具接觸處會變暗；遊戲端把頂點色乘進底色
+for ob in [body]:
+    bpy.ops.object.select_all(action='DESELECT')
+    ob.select_set(True)
+    bpy.context.view_layer.objects.active = ob
+    col = ob.data.color_attributes.new('Col', 'BYTE_COLOR', 'POINT')
+    ob.data.color_attributes.active_color = col
+    ob.data.color_attributes.render_color_index = ob.data.color_attributes.find('Col')
+    scn = bpy.context.scene
+    scn.render.engine = 'CYCLES'
+    scn.cycles.device = 'CPU'
+    scn.cycles.samples = 48
+    if scn.world is None:
+        scn.world = bpy.data.worlds.new('BakeWorld')
+    scn.world.light_settings.distance = 0.25
+    bpy.ops.object.bake(type='AO', target='VERTEX_COLORS')
+
 name = f'crew_{VARIANT}'
 glb = os.path.join(PROJECT, 'public', 'models', f'{name}.glb')
-export_glb(arm, glb)
+export_glb(arm, glb, vertex_color=True)
 save_blend(os.path.join(PROJECT, 'assets', 'blender', f'{name}.blend'))
 render_preview(os.path.join(PROJECT, 'docs', 'preview', f'{name}.png'), target=(0, 0.95, 0), cam_pos=(2.3, 1.5, 1.3), size=(900, 1100), lens=50)
 print('DONE', glb, os.path.getsize(glb))

@@ -61,6 +61,9 @@ const SPECS = {
   Helmet: { set: 'paint', rep: 8, n: 0.6, rough: 0.9, metal: 0.0, detail: 0.5 },
   RifleWood: { set: 'planks', rep: 9, n: 0.3, rough: 0.7, metal: 0.0 },
   Steel: { set: 'paint', rep: 8, n: 0.2, rough: 0.5, metal: 0.85 },
+  // 馬
+  Coat: { set: 'wool', rep: 9, n: 0.3, rough: 0.8, metal: 0.0, detail: 0.3, gain: 1.9 },
+  Mane: { set: 'wool', rep: 12, n: 1.0, rough: 1.0, metal: 0.0, detail: 0.4, gain: 1.9 },
 };
 
 const DUST = new THREE.Color(0x8a7a5c); // 滿洲平原的黃土色
@@ -69,6 +72,7 @@ const built = new Map();
 function build(src, spec, aoMap) {
   const m = new THREE.MeshStandardMaterial({ name: src.name, side: src.side });
   m.color.copy(src.color);
+  m.vertexColors = src.vertexColors; // 人物把烘焙的縫隙陰影存在頂點色
   m.map = src.map ?? null;
   if (spec.albedo) {
     m.map = tex(`${spec.set}_d`, spec.rep, true);
@@ -222,9 +226,9 @@ export function loadCarAO(modelUrl) {
 
 // 以世界座標做三向投影的貼圖材質：給沒有 UV 的程式幾何（道碴、枕木、月台、土牆）使用。
 // scale：貼圖一張代表幾公尺。
-export function worldMaterial(set, scale, { color = 0xffffff, roughness = 1, metalness = 0, flatShading = false } = {}) {
+export function worldMaterial(set, scale, { color = 0xffffff, roughness = 1, metalness = 0, flatShading = false, texture = null } = {}) {
   const m = new THREE.MeshStandardMaterial({ color, roughness, metalness, flatShading });
-  const map = tex(`${set}_d`, 1, true);
+  const map = texture ?? tex(`${set}_d`, 1, true); // texture：自備貼圖（例如程式畫的磚牆）
   m.customProgramCacheKey = () => 'world-triplanar';
   m.onBeforeCompile = (shader) => {
     shader.uniforms.uTex = { value: map };

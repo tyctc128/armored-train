@@ -4,6 +4,7 @@ import { mulberry32 } from '../core/math.js';
 import { fbm } from './noise.js';
 import { distToTrack, trackZ, trackY } from './track.js';
 import { buildTrees } from './trees.js';
+import { buildStation, buildWaterTower, buildSemaphore, housePrototype } from './buildings.js';
 
 // 樹林、村落、起點站
 export function buildScenery(scene, terrain) {
@@ -33,14 +34,7 @@ export function buildScenery(scene, terrain) {
   }
   group.add(buildTrees(spots));
 
-  // 村落：鐵道北側約 650 m 的一群土牆房舍
-  const wallGeo = new THREE.BoxGeometry(1, 1, 1);
-  wallGeo.translate(0, 0.5, 0);
-  const roofGeo = new THREE.ConeGeometry(0.75, 0.5, 4, 1);
-  roofGeo.rotateY(Math.PI / 4);
-  roofGeo.translate(0, 1.25, 0);
-  const wallMat = worldMaterial('dirt', 2.5, { color: 0xc9b089 });
-  const roofMat = worldMaterial('grass', 2.0, { color: 0x8f7d5c, flatShading: true });
+  // 村落：鐵道北側約 650 m、南側約 900 m 各一群土坯民房（草頂、紙窗，門朝南）
   const houses = [];
   for (const [cx, off] of [
     [700, -650],
@@ -50,38 +44,46 @@ export function buildScenery(scene, terrain) {
     for (let k = 0; k < 14; k++) {
       const x = cx + (rng() - 0.5) * 220;
       const z = cz + (rng() - 0.5) * 160;
-      houses.push([x, z, 6 + rng() * 6, 5 + rng() * 4, 3 + rng() * 1.5, rng() * 0.4]);
+      houses.push([x, z, 7 + rng() * 6, 5 + rng() * 2.5, 2.6 + rng() * 0.8, (rng() - 0.5) * 0.5]);
     }
   }
-  const walls = new THREE.InstancedMesh(wallGeo, wallMat, houses.length);
-  const roofs = new THREE.InstancedMesh(roofGeo, roofMat, houses.length);
-  houses.forEach(([x, z, w, d, h, yaw], i) => {
-    q.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, yaw);
-    p.set(x, terrain.heightAt(x, z) - 0.2, z);
-    s.set(w, h, d);
-    m.compose(p, q, s);
-    walls.setMatrixAt(i, m);
-    roofs.setMatrixAt(i, m);
-  });
-  walls.castShadow = roofs.castShadow = true;
-  group.add(walls, roofs);
+  for (const [geo, mat] of housePrototype()) {
+    const inst = new THREE.InstancedMesh(geo, mat, houses.length);
+    houses.forEach(([x, z, w, d, h, yaw], i) => {
+      q.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, yaw);
+      p.set(x, terrain.heightAt(x, z) - 0.2, z);
+      s.set(w, h, d);
+      m.compose(p, q, s);
+      inst.setMatrixAt(i, m);
+    });
+    inst.castShadow = inst.receiveShadow = true;
+    group.add(inst);
+  }
 
-  // 起點站：月台與站房（鐵道南側）
-  const stX = -1500;
-  const stZ = trackZ(stX) + 9;
-  const stY = trackY(stX);
-  const platform = new THREE.Mesh(
-    new THREE.BoxGeometry(140, 1.0, 6),
-    worldMaterial('gravel', 1.6, { color: 0xc8c2b6 }),
-  );
-  platform.position.set(stX + 60, stY - 0.5, stZ - 2.5);
-  platform.receiveShadow = true;
-  const station = new THREE.Mesh(new THREE.BoxGeometry(24, 5, 8), wallMat);
-  station.position.set(stX + 40, stY + 2.5, stZ + 6);
-  const stRoof = new THREE.Mesh(new THREE.BoxGeometry(26, 0.6, 10), roofMat);
-  stRoof.position.set(stX + 40, stY + 5.3, stZ + 6);
-  station.castShadow = stRoof.castShadow = true;
-  group.add(platform, station, stRoof);
+  // 車站（鐵道南側）：起點站與終點站各有月台、紅磚站房、水塔、號誌機
+  const platMat = worldMaterial('gravel', 1.6, { color: 0xc8c2b6 });
+  const edgeMat = worldMaterial('gravel', 1.0, { color: 0xe2ddd2 });
+  for (const [stX, name, dir] of [
+    [-1500, '起點', 1],
+    [1420, '終點', -1],
+  ]) {
+    const stZ = trackZ(stX) + 9;
+    const stY = trackY(stX);
+    const cx = stX + dir * 60;
+    const platform = new THREE.Mesh(new THREE.BoxGeometry(140, 1.0, 6), platMat);
+    platform.position.set(cx, stY - 0.5, stZ - 2.5);
+    platform.receiveShadow = true;
+    const edge = new THREE.Mesh(new THREE.BoxGeometry(140, 1.02, 0.5), edgeMat); // 月台邊的石條
+    edge.position.set(cx, stY - 0.5, stZ - 5.3);
+    edge.receiveShadow = true;
+    const station = buildStation(name);
+    station.position.set(stX + dir * 40, stY - 0.1, stZ + 6);
+    const tower = buildWaterTower();
+    tower.position.set(stX + dir * 118, terrain.heightAt(stX + dir * 118, stZ + 3) - 0.2, stZ + 3);
+    const sem = buildSemaphore();
+    sem.position.set(stX + dir * 138, stY - 0.3, stZ - 5.5);
+    group.add(platform, edge, station, tower, sem);
+  }
 
   scene.add(group);
   return group;

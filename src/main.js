@@ -55,6 +55,7 @@ async function init() {
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(70, 1, 0.05, 40000);
 
+  const debugView = { pos: null, look: null };
   setMaxAnisotropy(renderer.capabilities.getMaxAnisotropy());
   const post = setupPost(renderer, scene, camera);
 
@@ -745,6 +746,11 @@ async function init() {
       audio.updateEngine(dt, train.speed, loco.chimney.getWorldPosition(locoPos));
     }
     applyCamera();
+    if (debugView.pos) {
+      // 開發用：自由鏡頭（檢查場景用）
+      camera.position.copy(debugView.pos);
+      camera.lookAt(debugView.look);
+    }
     if (game.mode === 'third') focus.copy(orbitCenter);
     else focus.copy(camera.position);
     env.update(focus);
@@ -761,7 +767,7 @@ async function init() {
     const steps = (n, dt = 1 / 60) => {
       for (let i = 0; i < n; i++) step(dt);
     };
-    window.__game = { game, camera, renderer, scene, interiorLights, post, stations, player, train, targets, steps, railBreak, input, damage, battery, enemyTrain, guide, openGuide, closeGuide, tutorial, get mission() { return mission; } };
+    window.__game = { game, camera, renderer, scene, interiorLights, post, debugView, THREE, stations, player, train, targets, steps, railBreak, input, damage, battery, enemyTrain, guide, openGuide, closeGuide, tutorial, get mission() { return mission; } };
   }
 
   ui.loading.classList.add('hidden');

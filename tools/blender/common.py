@@ -350,7 +350,7 @@ def select_tree(root):
     bpy.context.view_layer.objects.active = root
 
 
-def export_glb(root, path):
+def export_glb(root, path, vertex_color=False):
     os.makedirs(os.path.dirname(path), exist_ok=True)
     select_tree(root)
     bpy.ops.export_scene.gltf(
@@ -362,6 +362,7 @@ def export_glb(root, path):
         export_yup=True,
         export_cameras=False,
         export_lights=False,
+        export_vertex_color='ACTIVE' if vertex_color else 'MATERIAL',
         export_image_format='JPEG',
         export_jpeg_quality=88,
         # Draco 幾何壓縮（遊戲端以 DRACOLoader 解碼）
@@ -423,7 +424,7 @@ def bake_ao(root, path, size=2048, samples=48, distance=1.2):
     os.makedirs(os.path.dirname(path), exist_ok=True)
     img.filepath_raw = path
     img.file_format = 'JPEG'
-    scene.render.image_settings.quality = 85
+    scene.render.image_settings.quality = 76
     img.save()
     for m, n in nodes:
         m.node_tree.nodes.remove(n)
