@@ -199,13 +199,18 @@ def dominant(v):
 
 region = {v: dominant(v) for v in bm.verts}
 si, li = vg['scalp'].index, vg['lips'].index
-collar_z = P['neck01'].z + 0.03
+collar_z = P['neck01'].z + 0.02
+# 在領口高度把網格切一刀，皮膚與軍服的交界才會是整齊的一圈（否則沿著三角形邊緣呈鋸齒狀）
+bmesh.ops.bisect_plane(bm, geom=list(bm.verts) + list(bm.edges) + list(bm.faces), plane_co=(0, 0, collar_z), plane_no=(0, 0, 1), dist=0.0005)
+bm.verts.ensure_lookup_table()
+bm.normal_update()
+region = {v: dominant(v) for v in bm.verts}
 SKINLIKE = {SKIN, HAIR, LIP}
 for f in bm.faces:
     rs = [region[v][:-1] if region[v][-1] in 'LR' else region[v] for v in f.verts]
     if all(r == 'Hand' for r in rs):
         mi = SKIN
-    elif all(r in ('Head', 'Spine') for r in rs) and all(v.co.z > collar_z for v in f.verts):
+    elif all(r in ('Head', 'Spine') for r in rs) and f.calc_center_median().z > collar_z:
         if all(v[dl].get(si, 0) > 0 for v in f.verts):
             mi = HAIR
         elif all(v[dl].get(li, 0) > 0 for v in f.verts):
@@ -267,6 +272,17 @@ me.polygons.foreach_set('material_index', face_mats)
 for n in ('scalp', 'lips', 'helper'):
     body.vertex_groups.remove(vg[n])
 body.name = 'Body'
+
+# 減面：MakeHuman 的網格很密（單是雙手就有六千多個三角形），遊戲裡同時有幾十名軍士。
+# 整體簡化到約三成的面數；權重會跟著內插。
+bpy.ops.object.select_all(action='DESELECT')
+body.select_set(True)
+bpy.context.view_layer.objects.active = body
+d = body.modifiers.new('Decimate', 'DECIMATE')
+d.ratio = 0.3
+d.use_collapse_triangulate = True
+bpy.ops.object.modifier_apply(modifier=d.name)
+print('BODY TRIS', sum(len(p.vertices) - 2 for p in body.data.polygons))
 
 # ───────────────────────── 4. 量測身體，供裝具定位 ─────────────────────────
 G = {k: game(p) for k, p in P.items()}
@@ -386,9 +402,9 @@ part('Belt', 'Hips', m)
 m = MeshBuilder()
 NECK = [p for p in NECKV if math.hypot(p.x - JP['Head'].x, p.z) < 0.085]
 nx, nz, nrx, nrz = ring_at(collar_y, 0.02, NECK)
-tube(m, [(collar_y - 0.04, nx, nz, nrx + 0.026, nrz + 0.026), (collar_y + 0.022, nx, nz, nrx + 0.013, nrz + 0.013), (collar_y + 0.022, nx, nz, nrx + 0.002, nrz + 0.002)], WOOL)
+tube(m, [(collar_y - 0.05, nx, nz, nrx + 0.04, nrz + 0.04), (collar_y - 0.015, nx, nz, nrx + 0.02, nrz + 0.02), (collar_y + 0.03, nx, nz, nrx + 0.014, nrz + 0.014), (collar_y + 0.03, nx, nz, nrx + 0.003, nrz + 0.003)], WOOL)
 for s in (-1, 1):
-    m.box((nx + nrx * 0.93 + 0.02, collar_y - 0.008, s * 0.03), (0.006, 0.02, 0.032), RED)
+    m.box((nx + nrx * 0.93 + 0.026, collar_y + 0.008, s * 0.03), (0.006, 0.02, 0.032), RED)
 for j in range(5):
     y = belt_y + 0.06 + j * (collar_y - 0.09 - belt_y - 0.06) / 4
     m.lathe((front_x(y, 0) + 0.001, y, 0), (1, 0, 0), [(0, 0.011), (0.006, 0.007), (0.009, 0)], 10, BRS, cap0=False)
@@ -404,11 +420,11 @@ if VARIANT in ('soldier', 'enemy'):
     m.box((bxk, by, 0), (0.12, 0.3, 0.29), CNV)                                            # 背囊
     m.cylinder((bxk, by + 0.17, -0.16), (bxk, by + 0.17, 0.16), 0.045, 12, PUT)            # 捲起的外套
 if VARIANT == 'officer':
-    for j in range(12):                                                                   # 斜背帶
-        t = j / 11
+    for j in range(40):                                                                   # 斜背帶
+        t = j / 39
         z = -0.15 + t * 0.27
         y = belt_y + 0.03 + t * (sh_y - belt_y - 0.05)
-        m.box((front_x(y, z, 0.04, 0.05) + 0.004, y, z), (0.008, 0.05, 0.035), LEA)
+        m.box((front_x(y, z, 0.04, 0.05) + 0.003, y, z), (0.008, 0.03, 0.036), LEA)
     fy = belt_y + 0.2
     for z in (-0.04, 0.04):
         m.lathe((front_x(fy, 0) + 0.035, fy - 0.05, z), (0, 1, 0), [(0, 0.028), (0.07, 0.024), (0.1, 0.02), (0.1, 0)], 12, STL)   # 望遠鏡
@@ -574,6 +590,13 @@ for ob in [body]:
         scn.world = bpy.data.worlds.new('BakeWorld')
     scn.world.light_settings.distance = 0.25
     bpy.ops.object.bake(type='AO', target='VERTEX_COLORS')
+    # 陰影只壓到約一半亮度：靜止姿勢下手貼著大腿，全黑的話抬手時會像戴了深色手套
+    import numpy as np
+    buf = np.zeros(len(col.data) * 4, dtype=np.float32)
+    col.data.foreach_get('color', buf)
+    buf = buf.reshape(-1, 4)
+    buf[:, :3] = 0.5 + 0.5 * buf[:, :3]
+    col.data.foreach_set('color', buf.ravel())
 
 name = f'crew_{VARIANT}'
 glb = os.path.join(PROJECT, 'public', 'models', f'{name}.glb')

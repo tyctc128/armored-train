@@ -81,6 +81,49 @@ async function init() {
   scene.add(terrain.mesh);
   buildScenery(scene, terrain);
 
+  // 畫質：高（後製、4K 陰影、全部樹木）／低（關後製、解析度與陰影減半、樹木減量）。
+  // 預設依顯示卡自動判斷：內建顯示卡或軟體算圖用「低」；選擇會記住。
+  const QUALITY_KEY = 'armoredTrain.quality';
+  const detectQuality = () => {
+    try {
+      const gl = renderer.getContext();
+      const ext = gl.getExtension('WEBGL_debug_renderer_info');
+      const name = ext ? String(gl.getParameter(ext.UNMASKED_RENDERER_WEBGL)) : '';
+      return /swiftshader|llvmpipe|software|intel(?!.*arc)|mali|adreno|powervr|apple gpu/i.test(name) ? 'low' : 'high';
+    } catch {
+      return 'high';
+    }
+  };
+  let qualityLevel = 'high';
+  try {
+    qualityLevel = localStorage.getItem(QUALITY_KEY) ?? detectQuality();
+  } catch {
+    qualityLevel = detectQuality();
+  }
+  const qualityBtn = document.getElementById('pause-quality');
+  const applyQuality = () => {
+    const hi = qualityLevel === 'high';
+    post.enabled = hi;
+    renderer.setPixelRatio(Math.min(devicePixelRatio, hi ? 1.5 : 1));
+    env.sun.shadow.mapSize.setScalar(hi ? 4096 : 2048);
+    env.sun.shadow.map?.dispose();
+    env.sun.shadow.map = null;
+    for (const t of scene.getObjectByName('trees')?.children ?? []) t.count = Math.round(t.userData.full * (hi ? 1 : 0.4));
+    resize();
+    qualityBtn.textContent = `畫質：${hi ? '高' : '低'}（點擊切換）`;
+  };
+  applyQuality();
+  qualityBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    qualityLevel = qualityLevel === 'high' ? 'low' : 'high';
+    try {
+      localStorage.setItem(QUALITY_KEY, qualityLevel);
+    } catch {
+      /* 無法存檔時只在本次生效 */
+    }
+    applyQuality();
+  });
+
   ui.setLoading('依史料校正彈道、計算射表…');
   await tick();
   for (const w of Object.values(WEAPONS)) {

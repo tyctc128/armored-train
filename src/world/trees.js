@@ -101,6 +101,7 @@ const VARIANTS = [
 // spots：[{ x, y, z, h, rot, v }]，v 為 0–1 的亂數（決定樹種）
 export function buildTrees(spots) {
   const group = new THREE.Group();
+  group.name = 'trees';
   const geo = crossGeometry();
   const m = new THREE.Matrix4();
   const q = new THREE.Quaternion();
@@ -127,6 +128,7 @@ export function buildTrees(spots) {
     });
     mesh.instanceMatrix.needsUpdate = true;
     mesh.castShadow = true;
+    mesh.userData.full = mine.length;
     group.add(mesh);
   });
   return group;
