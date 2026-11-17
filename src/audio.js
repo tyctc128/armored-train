@@ -20,8 +20,10 @@ const SAMPLES = {
   ding: { files: ['ding'], jitter: 0 },
   chuff: { files: ['chuff'], jitter: 0.08 },
   whistle: { files: ['whistle'], jitter: 0 },
+  horse: { files: ['horse'], jitter: 0.05 },
 };
 const LOOP_ROLLING = 'rolling';
+const LOOP_IDLE = 'idle'; // 停車時機車的空氣泵聲
 
 // WebAudio 3D 音效：全部 3D 定位，並依距離以音速延遲、以低通模擬空氣吸收。
 // 錄音載入前（或載入失敗）退回程式合成音。
@@ -36,7 +38,7 @@ export class Audio3D {
   }
 
   async loadSamples() {
-    const names = new Set([LOOP_ROLLING, ...Object.values(SAMPLES).flatMap((s) => s.files)]);
+    const names = new Set([LOOP_ROLLING, LOOP_IDLE, ...Object.values(SAMPLES).flatMap((s) => s.files)]);
     await Promise.all([...names].map(async (n) => {
       try {
         const res = await fetch(`${import.meta.env.BASE_URL}sfx/${n}.mp3`);
@@ -47,6 +49,32 @@ export class Audio3D {
       }
     }));
     this.startRolling();
+  }
+
+  // 機車怠速聲（循環），跟著機車移動；停車時較大聲，行駛時被排汽聲蓋過
+  updateIdle(v, pos) {
+    const buf = this.buffers[LOOP_IDLE];
+    if (!buf) return;
+    const ctx = this.ctx;
+    if (!this.idle) {
+      const src = ctx.createBufferSource();
+      src.buffer = buf;
+      src.loop = true;
+      const p = ctx.createPanner();
+      p.panningModel = 'equalpower';
+      p.distanceModel = 'inverse';
+      p.refDistance = 12;
+      const g = ctx.createGain();
+      g.gain.value = 0;
+      src.connect(g).connect(p).connect(this.master);
+      src.start();
+      this.idle = { g, p };
+    }
+    const t = ctx.currentTime;
+    this.idle.g.gain.setTargetAtTime(v < 0.1 ? 0.5 : 0.15, t, 0.5);
+    this.idle.p.positionX.setValueAtTime(pos.x, t);
+    this.idle.p.positionY.setValueAtTime(pos.y, t);
+    this.idle.p.positionZ.setValueAtTime(pos.z, t);
   }
 
   // 行駛中的輪軌聲（循環），音量與速度隨列車速度變化
@@ -193,12 +221,14 @@ export class Audio3D {
   updateEngine(dt, speed, locoPos) {
     if (!this.ctx || this.ctx.state !== 'running') return;
     const v = Math.abs(speed);
+    this.updateIdle(v, locoPos);
     if (this.rolling) {
       const near = Math.min(1, 40 / Math.max(1, locoPos.distanceTo(this.listenerPos)));
       const t = this.ctx.currentTime;
       this.rolling.g.gain.setTargetAtTime(Math.min(1, v / 12) * 0.7 * near, t, 0.3);
       this.rolling.src.playbackRate.setTargetAtTime(0.7 + Math.min(v, 17) / 30, t, 0.3);
     }
+    if (v < 0.1 && this.idle) return; // 停車時由怠速聲代替排汽聲
     const rate = v < 0.1 ? 0.6 : (4 * v) / (2 * Math.PI * 0.69);
     this.chuffT -= dt;
     if (this.chuffT <= 0) {

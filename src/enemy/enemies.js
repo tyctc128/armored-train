@@ -95,6 +95,20 @@ export class Enemies {
     return m;
   }
 
+  // 騎兵馬蹄聲：每隔一段時間在騎乘者中心播放一次
+  hoofSound(u, dt) {
+    u.hoofT = (u.hoofT ?? Math.random()) - dt;
+    if (u.hoofT > 0) return;
+    u.hoofT = 3.5;
+    const riders = u.members.filter((m) => m.alive && m.horse && !(m.horse.dead > 0));
+    if (!riders.length) return;
+    const c = this._hoof ?? (this._hoof = new THREE.Vector3());
+    c.set(0, 0, 0);
+    for (const m of riders) c.add(m.horse.root.position);
+    c.divideScalar(riders.length).y += 1;
+    this.game.audio.play('horse', c, 0.5 + riders.length / 12);
+  }
+
   // ── 每幀更新 ──
   update(dt) {
     const trainC = this.trainCenter(this._v);
@@ -126,6 +140,7 @@ export class Enemies {
           continue;
         }
       }
+      if (u.type === 'cavalry') this.hoofSound(u, dt);
       for (const m of u.members) {
         if (m.alive) {
           if (u.type === 'infantry') this.updateInfantry(m, u, dt, trainC);
