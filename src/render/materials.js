@@ -148,7 +148,7 @@ function build(src, spec, aoMap) {
           diffuseColor.rgb *= 0.78 + 0.3 * wFbm(vBaseUv * 1.7 + 3.1);` : ''}
           ${spec.weather === 'ext' ? `
           // 下緣揚起的塵土：軌面以上 0.3–2.2 m 漸淡
-          float dustAmt = smoothstep(2.3, 0.4, vH) * (0.35 + 0.65 * wN) * 0.75;
+          float dustAmt = smoothstep(1.5, 0.3, vH) * (0.35 + 0.65 * wN) * 0.4; // 影片中新造的車身一路到下緣都是深色，揚塵只留薄薄一層
           // 朝上的面積塵與煤煙
           float up = smoothstep(0.55, 0.95, vWN.y);
           dustAmt = max(dustAmt, up * smoothstep(0.0, 1.6, vH) * 0.28 * (0.5 + wN));

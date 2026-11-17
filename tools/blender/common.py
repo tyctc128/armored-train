@@ -221,12 +221,14 @@ def save_image(name, rgb, folder):
 
 
 def camo_texture(folder, n=1024, seed=1934):
-    """1934 年試驗運行時的塗裝（依當時照片）：深橄欖底、低對比褐色斑，
-    加上細的黃赭色彎曲條紋（寬約 11 cm、大致垂直、間隔約 2 m，偶有彎鉤）。
+    """1934 年試驗運行時的塗裝（依當時照片與試驗影片）：橄欖底、深褐與淺土黃的大色塊，
+    加上黃赭色彎曲色帶（寬約 17 cm、大致垂直、間隔約 2 m，偶有彎鉤）。
+    影片中色帶比先前做的寬，色塊之間的明暗差也更明顯。
     一張代表 4 m，上下左右皆可平鋪。另含板縫與污漬。"""
     rng = np.random.default_rng(seed)
     base = srgb('#4b5034')
-    patch = srgb('#4f4630')
+    patch = srgb('#3e3625')
+    light = srgb('#6b6a45')
     stripe = srgb('#c9ad66')
     px = n / 4.0  # 每公尺像素
     rows = np.arange(n)
@@ -235,11 +237,13 @@ def camo_texture(folder, n=1024, seed=1934):
     rgb = np.empty((n, n, 3))
     rgb[:] = base
     # 低對比的褐色斑（照片中較深的區塊）
-    soft = np.clip((m1 - 0.55) / 0.08, 0, 1) * 0.8
+    soft = np.clip((m1 - 0.55) / 0.05, 0, 1) * 0.9
     rgb = rgb * (1 - soft[:, :, None]) + patch[None, None, :] * soft[:, :, None]
+    pale = np.clip((0.42 - m1) / 0.05, 0, 1) * 0.85     # 較淺的土黃色塊
+    rgb = rgb * (1 - pale[:, :, None]) + light[None, None, :] * pale[:, :, None]
 
     mask = np.zeros((n, n))
-    half_w = 0.055 * px
+    half_w = 0.085 * px
 
     def paint_curve(xc, rows_sel, slope, scale=1.0):
         """xc：每列條紋中心（像素，可超出邊界、以平鋪處理）；scale：每列寬度倍率。"""
