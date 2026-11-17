@@ -6,6 +6,9 @@ import { Track } from './world/track.js';
 import { Terrain } from './world/terrain.js';
 import { buildScenery } from './world/scenery.js';
 import { setupEnvironment } from './world/environment.js';
+import { setupPost } from './render/post.js';
+import { InteriorLights } from './render/interiorLights.js';
+import { setMaxAnisotropy } from './render/materials.js';
 import { createMaterials, FLOOR_Y } from './train/carModels.js';
 import { Train, NOTCHES } from './train/train.js';
 import { loadModels } from './train/models.js';
@@ -48,14 +51,18 @@ async function init() {
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 0.85;
+  renderer.toneMappingExposure = 1.0;
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(70, 1, 0.05, 40000);
+
+  setMaxAnisotropy(renderer.capabilities.getMaxAnisotropy());
+  const post = setupPost(renderer, scene, camera);
 
   function resize() {
     const w = innerWidth;
     const h = innerHeight;
     renderer.setSize(w, h, false);
+    post.setSize(w, h, renderer.getPixelRatio());
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
     overlay.width = w;
@@ -132,6 +139,7 @@ async function init() {
     },
   }, models);
   game.train = train;
+  const interiorLights = new InteriorLights(scene, train);
   const railBreak = new RailBreak(scene, track, game);
   game.railBreak = railBreak;
   train.updateTransforms(0);
@@ -741,7 +749,8 @@ async function init() {
     else focus.copy(camera.position);
     env.update(focus);
     audio.setListener(camera);
-    renderer.render(scene, camera);
+    interiorLights.update(camera);
+    post.render();
     drawOverlay();
     updateHud(dt);
     input.endFrame();
@@ -752,7 +761,7 @@ async function init() {
     const steps = (n, dt = 1 / 60) => {
       for (let i = 0; i < n; i++) step(dt);
     };
-    window.__game = { game, camera, renderer, scene, stations, player, train, targets, steps, railBreak, input, damage, battery, enemyTrain, guide, openGuide, closeGuide, tutorial, get mission() { return mission; } };
+    window.__game = { game, camera, renderer, scene, interiorLights, post, stations, player, train, targets, steps, railBreak, input, damage, battery, enemyTrain, guide, openGuide, closeGuide, tutorial, get mission() { return mission; } };
   }
 
   ui.loading.classList.add('hidden');

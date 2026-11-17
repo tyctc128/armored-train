@@ -1,4 +1,5 @@
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { upgradeCarMaterials, loadCarAO } from '../render/materials.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 
 // Blender 輸出的車廂模型（由 tools/blender/*.py 產生），鍵為車廂 kind；
@@ -33,6 +34,7 @@ export async function loadModels(onProgress) {
       try {
         const gltf = await loader.loadAsync(url);
         out[kind] = gltf.scene;
+        if (!kind.startsWith('npc') && kind !== 'horse') upgradeCarMaterials(gltf.scene, kind, await loadCarAO(url));
       } catch (err) {
         console.warn(`模型載入失敗，改用程式模型：${url}`, err);
       }
