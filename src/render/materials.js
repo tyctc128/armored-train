@@ -51,8 +51,16 @@ const SPECS = {
   Olive: { set: 'paint', rep: 5, n: 0.5, rough: 0.95, metal: 0.0, detail: 0.35 },
   Red: { set: 'paint', rep: 5, n: 0.4, rough: 0.8, metal: 0.0, detail: 0.3 },
   Paper: { set: 'wool', rep: 10, n: 0.15, rough: 1.0, metal: 0.0 },
-  Canvas: { set: 'wool', rep: 14, n: 0.8, rough: 1.0, metal: 0.0, detail: 0.5 },
+  Canvas: { set: 'wool', rep: 14, n: 0.8, rough: 1.0, metal: 0.0, detail: 0.5, gain: 1.9 },
   Coal: { set: 'gravel', rep: 6, n: 1.0, rough: 1.0, metal: 0.0 },
+  // 人物
+  Wool: { set: 'wool', rep: 22, n: 0.9, rough: 1.0, metal: 0.0, detail: 0.5, gain: 1.9 },
+  WoolDark: { set: 'wool', rep: 22, n: 1.0, rough: 1.0, metal: 0.0, detail: 0.5, gain: 1.9 },
+  Leather: { set: 'leather', rep: 10, n: 0.7, rough: 0.75, metal: 0.0, detail: 0.5, gain: 3.0 },
+  Boot: { set: 'leather', rep: 8, n: 0.8, rough: 0.7, metal: 0.0, detail: 0.5, gain: 3.0 },
+  Helmet: { set: 'paint', rep: 8, n: 0.6, rough: 0.9, metal: 0.0, detail: 0.5 },
+  RifleWood: { set: 'planks', rep: 9, n: 0.3, rough: 0.7, metal: 0.0 },
+  Steel: { set: 'paint', rep: 8, n: 0.2, rough: 0.5, metal: 0.85 },
 };
 
 const DUST = new THREE.Color(0x8a7a5c); // 滿洲平原的黃土色
@@ -77,7 +85,7 @@ function build(src, spec, aoMap) {
   }
   const detail = spec.detail ? tex(`${spec.set}_d`, spec.rep, true) : null;
   if (detail || spec.weather) {
-    const key = `w|${spec.weather ?? ''}|${detail ? 1 : 0}`;
+    const key = `w|${spec.weather ?? ''}|${detail ? spec.set : ''}|${spec.gain ?? ''}`;
     m.customProgramCacheKey = () => key;
     m.onBeforeCompile = (shader) => {
       shader.uniforms.uDetail = { value: detail };
@@ -111,10 +119,10 @@ function build(src, spec, aoMap) {
           float wN = wFbm(vBaseUv * 9.0);
           ${detail ? `vec3 dTex = texture2D(uDetail, vBaseUv * uDetailRep).rgb;
           float dLum = dot(dTex, vec3(0.299, 0.587, 0.114));
-          diffuseColor.rgb *= mix(1.0, clamp(dLum * 4.5, 0.4, 1.35), uDetailAmt);
-          // 貼圖中偏紅褐的部分是鏽斑與掉漆：直接露出底下的鏽色
+          diffuseColor.rgb *= mix(1.0, clamp(dLum * ${(spec.gain ?? 4.5).toFixed(2)}, 0.4, 1.35), uDetailAmt);
+          ${spec.set === 'paint' ? `// 貼圖中偏紅褐的部分是鏽斑與掉漆：直接露出底下的鏽色
           float chip = smoothstep(0.02, 0.1, dTex.r - dTex.g) * uDetailAmt * 1.6;
-          diffuseColor.rgb = mix(diffuseColor.rgb, dTex * 0.9, clamp(chip, 0.0, 0.9));
+          diffuseColor.rgb = mix(diffuseColor.rgb, dTex * 0.9, clamp(chip, 0.0, 0.9));` : ''}
           // 大範圍的髒污濃淡
           diffuseColor.rgb *= 0.78 + 0.3 * wFbm(vBaseUv * 1.7 + 3.1);` : ''}
           ${spec.weather === 'ext' ? `
@@ -210,4 +218,44 @@ export function loadCarAO(modelUrl) {
       () => resolve(null),
     );
   });
+}
+
+// 以世界座標做三向投影的貼圖材質：給沒有 UV 的程式幾何（道碴、枕木、月台、土牆）使用。
+// scale：貼圖一張代表幾公尺。
+export function worldMaterial(set, scale, { color = 0xffffff, roughness = 1, metalness = 0, flatShading = false } = {}) {
+  const m = new THREE.MeshStandardMaterial({ color, roughness, metalness, flatShading });
+  const map = tex(`${set}_d`, 1, true);
+  m.customProgramCacheKey = () => 'world-triplanar';
+  m.onBeforeCompile = (shader) => {
+    shader.uniforms.uTex = { value: map };
+    shader.uniforms.uScale = { value: scale };
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 vTriPos;\nvarying vec3 vTriN;')
+      .replace(
+        '#include <begin_vertex>',
+        `#include <begin_vertex>
+        vec4 triP = vec4(transformed, 1.0);
+        vec3 triN = normal;
+        #ifdef USE_INSTANCING
+          triP = instanceMatrix * triP;
+          triN = mat3(instanceMatrix) * triN;
+        #endif
+        vTriPos = (modelMatrix * triP).xyz;
+        vTriN = normalize(mat3(modelMatrix) * triN);`,
+      );
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 vTriPos;\nvarying vec3 vTriN;\nuniform sampler2D uTex;\nuniform float uScale;')
+      .replace(
+        '#include <map_fragment>',
+        `vec3 triW = pow(abs(normalize(vTriN)), vec3(4.0));
+        triW /= triW.x + triW.y + triW.z;
+        vec3 triP = vTriPos / uScale;
+        vec3 triC = texture2D(uTex, triP.zy).rgb * triW.x + texture2D(uTex, triP.xz).rgb * triW.y + texture2D(uTex, triP.xy).rgb * triW.z;
+        // 遠處改用大尺度取樣，減少重複感
+        float triFar = smoothstep(30.0, 200.0, distance(vTriPos, cameraPosition));
+        triC = mix(triC, texture2D(uTex, triP.xz / 7.3).rgb, triFar * 0.7);
+        diffuseColor.rgb *= triC * 2.2;`,
+      );
+  };
+  return m;
 }

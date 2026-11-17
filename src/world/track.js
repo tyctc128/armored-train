@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { worldMaterial } from '../render/materials.js';
 
 // 鐵道中心線：大致沿 +X（往東）延伸 3.2 km；北方為 -Z。
 export const TRACK_X0 = -1600;
@@ -114,7 +115,7 @@ export class Track {
   buildMesh() {
     const group = new THREE.Group();
 
-    const ballastMat = new THREE.MeshStandardMaterial({ color: 0x6b655a, roughness: 1 });
+    const ballastMat = worldMaterial('gravel', 2.2, { color: 0xb3aa9c });
     const ballast = new THREE.Mesh(
       this.sweep(
         [
@@ -130,7 +131,7 @@ export class Track {
     ballast.receiveShadow = true;
     group.add(ballast);
 
-    const railMat = new THREE.MeshStandardMaterial({ color: 0x5c5650, roughness: 0.4, metalness: 0.85 });
+    const railMat = new THREE.MeshStandardMaterial({ color: 0x4a3c33, roughness: 0.55, metalness: 0.8 });
     const railProfile = [
       [-0.04, -0.17],
       [-0.035, -0.02],
@@ -147,7 +148,7 @@ export class Track {
 
     // 枕木
     const tieGeo = new THREE.BoxGeometry(0.24, 0.18, 2.6);
-    const tieMat = new THREE.MeshStandardMaterial({ color: 0x4a3a2c, roughness: 0.95 });
+    const tieMat = worldMaterial('planks', 1.4, { color: 0x6f6257 });
     const spacing = 0.65;
     const tieCount = Math.floor(this.length / spacing);
     const ties = new THREE.InstancedMesh(tieGeo, tieMat, tieCount);
@@ -172,7 +173,7 @@ export class Track {
     poleGeo.translate(0, 4, 0);
     const armGeo = new THREE.BoxGeometry(0.12, 0.12, 1.6);
     armGeo.translate(0, 7.4, 0);
-    const poleMat = new THREE.MeshStandardMaterial({ color: 0x5a4a3a, roughness: 1 });
+    const poleMat = worldMaterial('planks', 1.8, { color: 0x857565 });
     const poleCount = Math.floor(this.length / 50);
     const poles = new THREE.InstancedMesh(poleGeo, poleMat, poleCount);
     const arms = new THREE.InstancedMesh(armGeo, poleMat, poleCount);

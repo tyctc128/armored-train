@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { tex } from '../render/materials.js';
 import { makeNoise2D, fbm, ridged } from './noise.js';
 import { TRACK_X0, TRACK_X1, trackY, trackZ, distToTrack } from './track.js';
 import { clamp, lerp, smoothstep } from '../core/math.js';
@@ -90,40 +91,27 @@ export class Terrain {
     }
     geo.computeVertexNormals();
 
-    // 頂點顏色：草地、乾草、岩石、雪、道路
+    // 每個頂點的地表比例（aSplat）：r 泥土／岩石、g 積雪、b 明暗變化。實際貼圖混合在片段著色器中進行。
     const nrm = geo.attributes.normal;
-    const colors = new Float32Array(pos.count * 3);
+    const splat = new Float32Array(pos.count * 3);
     const uv = geo.attributes.uv;
-    const grass = new THREE.Color(0x56603a);
-    const dry = new THREE.Color(0x7d7552);
-    const rock = new THREE.Color(0x6e6a62);
-    const snow = new THREE.Color(0xdfe3e6);
-    const dirt = new THREE.Color(0x6a5e4a);
-    const c = new THREE.Color();
     for (let i = 0; i < pos.count; i++) {
       const x = pos.getX(i);
       const y = pos.getY(i);
       const z = pos.getZ(i);
       const slope = 1 - nrm.getY(i);
       const v = fbm(this.n2, x / 400, z / 400, 3) * 0.5 + 0.5;
-      c.copy(grass).lerp(dry, clamp(v * 1.2 - 0.1, 0, 1));
-      c.lerp(rock, smoothstep(0.12, 0.35, slope));
-      c.lerp(snow, smoothstep(330, 480, y) * (1 - smoothstep(0.35, 0.6, slope)));
-      c.lerp(dirt, this.roadBlend(x, z) * 0.9);
-      c.lerp(dirt, (1 - smoothstep(4, 14, distToTrack(x, z))) * 0.6);
-      colors[i * 3] = c.r;
-      colors[i * 3 + 1] = c.g;
-      colors[i * 3 + 2] = c.b;
-      uv.setXY(i, x / 9, z / 9);
+      let dirt = smoothstep(0.12, 0.35, slope);
+      dirt = Math.max(dirt, this.roadBlend(x, z) * 0.95, (1 - smoothstep(4, 14, distToTrack(x, z))) * 0.75);
+      const snow = smoothstep(150, 320, y) * (1 - smoothstep(0.35, 0.6, slope));
+      splat[i * 3] = dirt;
+      splat[i * 3 + 1] = snow;
+      splat[i * 3 + 2] = v;
+      uv.setXY(i, x / 5, z / 5);
     }
-    geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    geo.setAttribute('aSplat', new THREE.BufferAttribute(splat, 3));
 
-    const mat = new THREE.MeshStandardMaterial({
-      vertexColors: true,
-      map: detailTexture(),
-      roughness: 1,
-      metalness: 0,
-    });
+    const mat = winterGroundMaterial();
     this.mesh = new THREE.Mesh(geo, mat);
     this.mesh.receiveShadow = true;
   }
@@ -178,6 +166,63 @@ export class Terrain {
     }
     return null;
   }
+}
+
+// 初冬的滿洲平原地表：枯草為底，依 aSplat 混入泥土與積雪，另以雜訊加上零星殘雪與裸土。
+// 近處用細緻貼圖、遠處換成大尺度取樣，避免貼圖重複的格子感。
+function winterGroundMaterial() {
+  const mat = new THREE.MeshStandardMaterial({ map: tex('grass_d', 1, true), normalMap: tex('grass_n', 1), roughness: 1, metalness: 0 });
+  mat.normalScale.setScalar(0.8);
+  const dirt = tex('dirt_d', 1, true);
+  const snow = tex('snow_d', 1, true);
+  mat.onBeforeCompile = (shader) => {
+    shader.uniforms.uDirt = { value: dirt };
+    shader.uniforms.uSnow = { value: snow };
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nattribute vec3 aSplat;\nvarying vec3 vSplat;\nvarying vec3 vTerrPos;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvSplat = aSplat;\nvTerrPos = (modelMatrix * vec4(position, 1.0)).xyz;');
+    shader.fragmentShader = shader.fragmentShader
+      .replace(
+        '#include <common>',
+        `#include <common>
+        varying vec3 vSplat;
+        varying vec3 vTerrPos;
+        uniform sampler2D uDirt;
+        uniform sampler2D uSnow;
+        float tHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+        float tNoise(vec2 p) {
+          vec2 i = floor(p); vec2 f = fract(p); f = f * f * (3.0 - 2.0 * f);
+          return mix(mix(tHash(i), tHash(i + vec2(1.0, 0.0)), f.x), mix(tHash(i + vec2(0.0, 1.0)), tHash(i + vec2(1.0, 1.0)), f.x), f.y);
+        }
+        float tFbm(vec2 p) { return 0.5 * tNoise(p) + 0.3 * tNoise(p * 2.1) + 0.2 * tNoise(p * 4.3); }
+        float gSnowW = 0.0;`,
+      )
+      .replace(
+        '#include <map_fragment>',
+        `vec2 wp = vTerrPos.xz;
+        float camD = distance(vTerrPos, cameraPosition);
+        float farK = smoothstep(25.0, 260.0, camD);
+        vec3 grass = mix(texture2D(map, wp / 5.0).rgb, texture2D(map, wp / 43.0).rgb, farK);
+        vec3 soil = mix(texture2D(uDirt, wp / 4.0).rgb, texture2D(uDirt, wp / 37.0).rgb, farK);
+        vec3 snowC = mix(texture2D(uSnow, wp / 6.0).rgb, vec3(0.86, 0.88, 0.92), farK);
+        float macro = tFbm(wp / 110.0);
+        // 枯草的濃淡與色調變化（黃褐～灰褐）
+        grass *= mix(vec3(0.72, 0.68, 0.6), vec3(1.12, 1.05, 0.92), macro) * (0.8 + 0.4 * vSplat.b);
+        float bare = smoothstep(0.6, 0.78, tFbm(wp / 19.0 + 4.7));
+        float dirtW = clamp(vSplat.r + bare * 0.55, 0.0, 1.0);
+        float patch = smoothstep(0.56, 0.68, tFbm(wp / 27.0 + 11.3)) * smoothstep(0.35, 0.6, tFbm(wp / 140.0 + 2.0));
+        gSnowW = clamp(vSplat.g * 1.4 + patch * (1.0 - vSplat.r) * 0.85, 0.0, 1.0);
+        vec3 ground = mix(grass, soil * vec3(0.82, 0.76, 0.68), dirtW);
+        diffuseColor.rgb = mix(ground, snowC, gSnowW);`,
+      )
+      .replace(
+        '#include <normal_fragment_maps>',
+        `#include <normal_fragment_maps>
+        // 遠處與積雪處不需要草的凹凸
+        normal = normalize(mix(normal, nonPerturbedNormal, clamp(max(gSnowW * 0.8, smoothstep(20.0, 120.0, distance(vTerrPos, cameraPosition))), 0.0, 1.0)));`,
+      );
+  };
+  return mat;
 }
 
 function detailTexture() {

@@ -49,7 +49,7 @@ export function setupEnvironment(renderer, scene) {
   const hemi = new THREE.HemisphereLight(0xcadcf0, 0x4d4a38, 0.55);
   scene.add(hemi);
 
-  scene.fog = new THREE.FogExp2(0xb9bcb8, 0.00011);
+  scene.fog = new THREE.FogExp2(0xaeb4b6, 0.00017);
 
   new HDRLoader().load(`${import.meta.env.BASE_URL}textures/sky_2k.hdr`, (hdr) => {
     hdr.mapping = THREE.EquirectangularReflectionMapping;
@@ -64,6 +64,31 @@ export function setupEnvironment(renderer, scene) {
     scene.remove(sky, hemi);
   });
 
+  // 地平線的霧靄：遮住 HDR 全景裡的遠景（樹林、房舍），讓遠方融進冬天的薄霧
+  const hazeCanvas = document.createElement('canvas');
+  hazeCanvas.width = 4;
+  hazeCanvas.height = 256;
+  const hg = hazeCanvas.getContext('2d');
+  const grad = hg.createLinearGradient(0, 0, 0, 256);
+  grad.addColorStop(0, 'rgba(255,255,255,0)');
+  grad.addColorStop(0.45, 'rgba(255,255,255,0.55)');
+  grad.addColorStop(0.62, 'rgba(255,255,255,1)');
+  grad.addColorStop(1, 'rgba(255,255,255,1)');
+  hg.fillStyle = grad;
+  hg.fillRect(0, 0, 4, 256);
+  const haze = new THREE.Mesh(
+    new THREE.CylinderGeometry(22000, 22000, 5200, 48, 1, true),
+    // 不透明佇列＋自訂混合：在地形之前畫，只蓋住天空背景，不會蓋到地形
+    new THREE.MeshBasicMaterial({
+      color: 0xaeb4b6, map: new THREE.CanvasTexture(hazeCanvas), side: THREE.BackSide, fog: false,
+      blending: THREE.CustomBlending, blendSrc: THREE.SrcAlphaFactor, blendDst: THREE.OneMinusSrcAlphaFactor,
+      depthTest: false, depthWrite: false,
+    }),
+  );
+  haze.renderOrder = -10;
+  haze.frustumCulled = false;
+  scene.add(haze);
+
   return {
     sun,
     sunDir,
@@ -71,6 +96,7 @@ export function setupEnvironment(renderer, scene) {
     update(focus) {
       sun.position.copy(focus).addScaledVector(sunDir, 400);
       sun.target.position.copy(focus);
+      haze.position.set(focus.x, focus.y + 600, focus.z);
     },
   };
 }

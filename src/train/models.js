@@ -34,7 +34,8 @@ export async function loadModels(onProgress) {
       try {
         const gltf = await loader.loadAsync(url);
         out[kind] = gltf.scene;
-        if (!kind.startsWith('npc') && kind !== 'horse') upgradeCarMaterials(gltf.scene, kind, await loadCarAO(url));
+        const isCar = !kind.startsWith('npc') && kind !== 'horse';
+        upgradeCarMaterials(gltf.scene, kind, isCar ? await loadCarAO(url) : null);
       } catch (err) {
         console.warn(`模型載入失敗，改用程式模型：${url}`, err);
       }

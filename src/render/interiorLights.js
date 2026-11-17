@@ -33,7 +33,7 @@ export class InteriorLights {
     cands.sort((a, b) => a.d - b.d);
     this.lights.forEach((l, i) => {
       const c = cands[i];
-      l.intensity = c ? 4.5 : 0;
+      l.intensity = c ? 3.2 : 0;
       if (c) l.position.set(c.x, c.y - 0.12, c.z);
     });
   }

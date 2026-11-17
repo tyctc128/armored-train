@@ -1,31 +1,23 @@
 import * as THREE from 'three';
+import { worldMaterial } from '../render/materials.js';
 import { mulberry32 } from '../core/math.js';
 import { fbm } from './noise.js';
 import { distToTrack, trackZ, trackY } from './track.js';
+import { buildTrees } from './trees.js';
 
 // 樹林、村落、起點站
 export function buildScenery(scene, terrain) {
   const rng = mulberry32(42);
   const group = new THREE.Group();
 
-  // 樹：樹冠與樹幹兩組 InstancedMesh 共用變換
-  const crownGeo = new THREE.ConeGeometry(1, 1, 7);
-  crownGeo.translate(0, 0.62, 0);
-  const trunkGeo = new THREE.CylinderGeometry(0.08, 0.1, 0.3, 5);
-  trunkGeo.translate(0, 0.15, 0);
-  const crownMat = new THREE.MeshStandardMaterial({ color: 0x34462a, roughness: 1, flatShading: true });
-  const trunkMat = new THREE.MeshStandardMaterial({ color: 0x4a3b2b, roughness: 1 });
-  const max = 9000;
-  const crowns = new THREE.InstancedMesh(crownGeo, crownMat, max);
-  const trunks = new THREE.InstancedMesh(trunkGeo, trunkMat, max);
+  // 樹：落葉後的楊樹與柳樹（交叉面片），沿河谷與村落成片分布
+  const nrm = new THREE.Vector3();
   const m = new THREE.Matrix4();
   const q = new THREE.Quaternion();
   const s = new THREE.Vector3();
   const p = new THREE.Vector3();
-  const nrm = new THREE.Vector3();
-  const color = new THREE.Color();
-  let count = 0;
-  for (let tries = 0; tries < 90000 && count < max; tries++) {
+  const spots = [];
+  for (let tries = 0; tries < 90000 && spots.length < 9000; tries++) {
     const x = (rng() - 0.5) * 11000;
     const z = (rng() - 0.5) * 11000;
     const density = fbm(terrain.n1, x / 700 + 13, z / 700 - 7, 3);
@@ -37,21 +29,9 @@ export function buildScenery(scene, terrain) {
     if (y > 300) continue;
     terrain.normalAt(x, z, nrm);
     if (nrm.y < 0.85) continue;
-    const h = 7 + rng() * 9;
-    const w = h * (0.28 + rng() * 0.1);
-    q.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, rng() * Math.PI * 2);
-    s.set(w, h, w);
-    p.set(x, y - 0.3, z);
-    m.compose(p, q, s);
-    crowns.setMatrixAt(count, m);
-    trunks.setMatrixAt(count, m);
-    color.setHSL(0.24 + rng() * 0.06, 0.3, 0.75 + rng() * 0.3);
-    crowns.setColorAt(count, color);
-    count++;
+    spots.push({ x, y: y - 0.2, z, h: 9 + rng() * 9, rot: rng() * Math.PI, v: rng() });
   }
-  crowns.count = trunks.count = count;
-  crowns.instanceMatrix.needsUpdate = true;
-  group.add(crowns, trunks);
+  group.add(buildTrees(spots));
 
   // 村落：鐵道北側約 650 m 的一群土牆房舍
   const wallGeo = new THREE.BoxGeometry(1, 1, 1);
@@ -59,8 +39,8 @@ export function buildScenery(scene, terrain) {
   const roofGeo = new THREE.ConeGeometry(0.75, 0.5, 4, 1);
   roofGeo.rotateY(Math.PI / 4);
   roofGeo.translate(0, 1.25, 0);
-  const wallMat = new THREE.MeshStandardMaterial({ color: 0x9b8b6c, roughness: 1 });
-  const roofMat = new THREE.MeshStandardMaterial({ color: 0x5a4636, roughness: 1, flatShading: true });
+  const wallMat = worldMaterial('dirt', 2.5, { color: 0xc9b089 });
+  const roofMat = worldMaterial('grass', 2.0, { color: 0x8f7d5c, flatShading: true });
   const houses = [];
   for (const [cx, off] of [
     [700, -650],
@@ -92,7 +72,7 @@ export function buildScenery(scene, terrain) {
   const stY = trackY(stX);
   const platform = new THREE.Mesh(
     new THREE.BoxGeometry(140, 1.0, 6),
-    new THREE.MeshStandardMaterial({ color: 0x8a857a, roughness: 1 }),
+    worldMaterial('gravel', 1.6, { color: 0xc8c2b6 }),
   );
   platform.position.set(stX + 60, stY - 0.5, stZ - 2.5);
   platform.receiveShadow = true;

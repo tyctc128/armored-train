@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
 
 const JOINTS = [
   'Hips', 'Spine', 'Head',
@@ -71,7 +72,7 @@ export const POSES = {
 // 以分部件關節組成的 3D 軍士，動作由程式產生
 export class Soldier {
   constructor(template, { pose = 'stand', name = '', variant = 'crew' } = {}) {
-    this.root = template.clone(true);
+    this.root = cloneSkinned(template); // 蒙皮模型需連同骨架一起複製
     this.root.traverse((o) => {
       if (o.isMesh) {
         o.castShadow = true;
