@@ -18,6 +18,7 @@
 所以遊戲端的姿勢表（src/crew/soldier.js 的 POSES）可以直接套用。Root 在腳底，左側為 -Z。
 
 考據（昭和九年前後）：昭五式軍衣（立領、領章、五顆鈕扣、胸前口袋）、短袴加綁腿、編上靴；
+車外作戰的步兵與敵軍另穿外套（單排扣、及膝下）、戴防寒帽（呢料帽體、毛皮護耳與護額）與手套；
 步兵戴九〇式鉄帽，車組員與軍官戴軍帽（紅色帽圈、星章）。出處見 docs/references.md。
 """
 import math
@@ -36,6 +37,7 @@ from common import (  # noqa: E402
 VARIANT = (script_args() or ['soldier'])[0]
 assert VARIANT in ('soldier', 'crew', 'officer', 'enemy')
 ENEMY = VARIANT == 'enemy'
+WINTER = VARIANT in ('soldier', 'enemy')   # 車外作戰的人穿防寒外套、戴防寒帽；車內乘員穿軍衣
 HEIGHT = 1.66
 
 bpy.ops.wm.read_homefile(use_empty=True)
@@ -55,11 +57,12 @@ M_STOCK = material('RifleWood', '#6b4426', rough=0.6)
 M_STEEL = material('Steel', '#2c2c29', rough=0.4, metal=0.8)
 M_DARK = material('Eye', '#1c120c', rough=0.3)
 M_CANVAS = material('Canvas', '#8a7b55', rough=1.0)
-M_HAIR = material('Hair', '#1a1512', rough=0.8)
-M_LIP = material('Lip', '#a8705c', rough=0.5)
+M_HAIR = material('Hair', '#4a3d34', rough=0.9)    # 丸刈り：貼著頭皮的短髮，顏色接近深膚色
+M_LIP = material('Lip', '#b58268', rough=0.55)
 M_WHITE = material('EyeWhite', '#d8d2c8', rough=0.3)
-MATS = [M_WOOL, M_PUTTEE, M_SKIN, M_LEATHER, M_BOOT, M_HELM, M_BRASS, M_RED, M_STOCK, M_STEEL, M_DARK, M_CANVAS, M_HAIR, M_LIP, M_WHITE]
-WOOL, PUT, SKIN, LEA, BOOT, HELM, BRS, RED, WOOD, STL, EYE, CNV, HAIR, LIP, WHT = range(15)
+M_FUR = material('Fur', '#77776f' if ENEMY else '#8f7a5c', rough=1.0)   # 兔毛
+MATS = [M_WOOL, M_PUTTEE, M_SKIN, M_LEATHER, M_BOOT, M_HELM, M_BRASS, M_RED, M_STOCK, M_STEEL, M_DARK, M_CANVAS, M_HAIR, M_LIP, M_WHITE, M_FUR]
+WOOL, PUT, SKIN, LEA, BOOT, HELM, BRS, RED, WOOD, STL, EYE, CNV, HAIR, LIP, WHT, FUR = range(16)
 
 # ───────────────────────── 1. 產生人體並擺成雙臂下垂 ─────────────────────────
 macro = TargetService.get_default_macro_info_dict()
@@ -209,7 +212,7 @@ SKINLIKE = {SKIN, HAIR, LIP}
 for f in bm.faces:
     rs = [region[v][:-1] if region[v][-1] in 'LR' else region[v] for v in f.verts]
     if all(r == 'Hand' for r in rs):
-        mi = SKIN
+        mi = PUT if WINTER else SKIN   # 冬季戴防寒手套
     elif all(r in ('Head', 'Spine') for r in rs) and f.calc_center_median().z > collar_z:
         if all(v[dl].get(si, 0) > 0 for v in f.verts):
             mi = HAIR
@@ -237,11 +240,13 @@ for v in bm.verts:
     elif PUT in mats:
         amt = 0.007
     elif r.startswith('Hip') and r != 'Hips':
-        amt = 0.02     # 短袴大腿較寬鬆
+        amt = 0.03     # 短袴大腿寬鬆，到膝下才收進綁腿
     elif r in ('Spine', 'Hips'):
-        amt = 0.015
+        amt = 0.032 if WINTER else 0.015
+    elif r.startswith('Hand'):
+        amt = 0.006
     else:
-        amt = 0.012
+        amt = 0.024 if WINTER else 0.012   # 袖子
     v.co += v.normal * amt
 bm.normal_update()
 
@@ -377,8 +382,36 @@ def part(name, bone, builder, bevel=0.004):
 m = MeshBuilder()
 cx, cz, rx, rz = ring_at(belt_y)
 hx, hz, hrx, hrz = ring_at(belt_y - 0.14)
-tube(m, [(belt_y - 0.2, hx, hz, hrx + 0.03, hrz + 0.028), (belt_y - 0.1, hx, hz, hrx + 0.022, hrz + 0.02), (belt_y + 0.01, cx, cz, rx + 0.006, rz + 0.006)], WOOL)
-part('TunicSkirt', 'Hips', m, bevel=0)
+if WINTER:
+    # 外套下襬：從腰帶到膝下約 12 cm，向下略張開。下半段的權重分給左右大腿，走動、騎馬時會跟著腿擺動
+    hem_y = JP['KneeL'].y - 0.12
+    rings = []
+    for i in range(8):
+        t = i / 7
+        y = belt_y + 0.01 - t * (belt_y + 0.01 - hem_y)
+        k = min(1.0, t / 0.3)
+        gx = 0.006 + k * 0.03 + t * 0.035
+        gz = 0.006 + k * 0.026 + t * 0.03
+        rings.append((y, cx + (hx - cx) * k, cz + (hz - cz) * k, rx + (hrx - rx) * k + gx, rz + (hrz - rz) * k + gz))
+    tube(m, list(reversed(rings)), WOOL)
+    for j in range(2):     # 下襬的鈕扣（單排扣）
+        for z in (0.0,):
+            y = belt_y - 0.09 - j * 0.13
+            t = (belt_y + 0.01 - y) / (belt_y + 0.01 - hem_y)
+            k = min(1.0, t / 0.3)
+            fx = cx + (hx - cx) * k + (rx + (hrx - rx) * k + 0.006 + k * 0.03 + t * 0.035) * math.sqrt(max(0.0, 1 - (z / (rz + hrz)) ** 2 * 4))
+            m.lathe((fx - 0.004, y, z), (1, 0, 0), [(0, 0.012), (0.007, 0.008), (0.01, 0)], 10, BRS, cap0=False)
+
+    def skirt_weights(g):
+        t = max(0.0, min(1.0, (belt_y - g.y) / (belt_y - hem_y)))
+        leg = 0.8 * t
+        left = max(0.0, min(1.0, 0.5 - g.z / 0.16))    # 左側為 -Z
+        return {'Hips': 1 - leg, 'HipL': leg * left, 'HipR': leg * (1 - left)}
+
+    part('CoatSkirt', skirt_weights, m, bevel=0)
+else:
+    tube(m, [(belt_y - 0.2, hx, hz, hrx + 0.03, hrz + 0.028), (belt_y - 0.1, hx, hz, hrx + 0.022, hrz + 0.02), (belt_y + 0.01, cx, cz, rx + 0.006, rz + 0.006)], WOOL)
+    part('TunicSkirt', 'Hips', m, bevel=0)
 m = MeshBuilder()
 r0, r1 = 0.004, 0.012
 tube(m, [(belt_y - 0.025, cx, cz, rx + r0, rz + r0), (belt_y - 0.025, cx, cz, rx + r1, rz + r1), (belt_y + 0.025, cx, cz, rx + r1, rz + r1), (belt_y + 0.025, cx, cz, rx + r0, rz + r0)], LEA)
@@ -402,23 +435,48 @@ part('Belt', 'Hips', m)
 m = MeshBuilder()
 NECK = [p for p in NECKV if math.hypot(p.x - JP['Head'].x, p.z) < 0.085]
 nx, nz, nrx, nrz = ring_at(collar_y, 0.02, NECK)
-tube(m, [(collar_y - 0.05, nx, nz, nrx + 0.04, nrz + 0.04), (collar_y - 0.015, nx, nz, nrx + 0.02, nrz + 0.02), (collar_y + 0.03, nx, nz, nrx + 0.014, nrz + 0.014), (collar_y + 0.03, nx, nz, nrx + 0.003, nrz + 0.003)], WOOL)
-for s in (-1, 1):
-    m.box((nx + nrx * 0.93 + 0.026, collar_y + 0.008, s * 0.03), (0.006, 0.02, 0.032), RED)
-for j in range(5):
-    y = belt_y + 0.06 + j * (collar_y - 0.09 - belt_y - 0.06) / 4
-    m.lathe((front_x(y, 0) + 0.001, y, 0), (1, 0, 0), [(0, 0.011), (0.006, 0.007), (0.009, 0)], 10, BRS, cap0=False)
-py = sh_y - 0.15
-for s in (-1, 1):
-    fx = front_x(py, s * 0.09, 0.03, 0.04)
-    patch(m, py - 0.05, py + 0.05, s * 0.09 - 0.047, s * 0.09 + 0.047, 0.004, WOOL)      # 袋身
-    patch(m, py + 0.022, py + 0.058, s * 0.09 - 0.05, s * 0.09 + 0.05, 0.008, WOOL)       # 袋蓋
-    m.lathe((fx + 0.009, py + 0.03, s * 0.09), (1, 0, 0), [(0, 0.007), (0.005, 0)], 8, BRS, cap0=False)
+if WINTER:
+    # 外套：寬大的翻領（立起來可護住下巴與後頸）、單排扣。我軍為呢料領，架空敵軍為毛皮領
+    tube(m, [(collar_y - 0.085, nx - 0.01, nz, nrx + 0.085, nrz + 0.095), (collar_y - 0.03, nx - 0.008, nz, nrx + 0.075, nrz + 0.08),
+             (collar_y + 0.02, nx - 0.004, nz, nrx + 0.05, nrz + 0.05), (collar_y + 0.035, nx, nz, nrx + 0.03, nrz + 0.03),
+             (collar_y + 0.02, nx, nz, nrx + 0.012, nrz + 0.012)], FUR if ENEMY else WOOL)
+    for s_ in (-1, 1):       # 領章在翻領的前端
+        a_ = math.radians(30) * s_
+        m.box((nx - 0.008 + (nrx + 0.078) * math.cos(a_), collar_y - 0.03, nz + (nrz + 0.083) * math.sin(a_)), (0.012, 0.022, 0.034), RED)
+    for j in range(4):
+        y = belt_y + 0.07 + j * (collar_y - 0.16 - belt_y - 0.07) / 3
+        for z in (0.0,):
+            m.lathe((front_x(y, z) + 0.001, y, z), (1, 0, 0), [(0, 0.012), (0.007, 0.008), (0.01, 0)], 10, BRS, cap0=False)
+else:
+    tube(m, [(collar_y - 0.05, nx, nz, nrx + 0.04, nrz + 0.04), (collar_y - 0.015, nx, nz, nrx + 0.02, nrz + 0.02), (collar_y + 0.03, nx, nz, nrx + 0.014, nrz + 0.014), (collar_y + 0.03, nx, nz, nrx + 0.003, nrz + 0.003)], WOOL)
+    for s_ in (-1, 1):
+        m.box((nx + nrx * 0.93 + 0.026, collar_y + 0.008, s_ * 0.03), (0.006, 0.02, 0.032), RED)
+    for j in range(5):
+        y = belt_y + 0.06 + j * (collar_y - 0.09 - belt_y - 0.06) / 4
+        m.lathe((front_x(y, 0) + 0.001, y, 0), (1, 0, 0), [(0, 0.011), (0.006, 0.007), (0.009, 0)], 10, BRS, cap0=False)
+    py = sh_y - 0.15
+    for s_ in (-1, 1):
+        fx = front_x(py, s_ * 0.09, 0.03, 0.04)
+        patch(m, py - 0.05, py + 0.05, s_ * 0.09 - 0.047, s_ * 0.09 + 0.047, 0.004, WOOL)      # 袋身
+        patch(m, py + 0.022, py + 0.058, s_ * 0.09 - 0.05, s_ * 0.09 + 0.05, 0.008, WOOL)       # 袋蓋
+        m.lathe((fx + 0.009, py + 0.03, s_ * 0.09), (1, 0, 0), [(0, 0.007), (0.005, 0)], 8, BRS, cap0=False)
+SHOULDER = [p for p, r in CLOTH if r in ('Spine', 'ShoulderL', 'ShoulderR')]
+for s_ in (-1, 1):       # 肩章：緋色呢料，橫置於肩頭，順著肩線的斜度貼在衣服上
+    zj = JP['ShoulderL' if s_ < 0 else 'ShoulderR'].z
+    xj = JP['ShoulderL'].x
+    rows = []
+    for i in range(5):
+        z = zj * (0.6 + 0.3 * i / 4)
+        y = max(p.y for p in SHOULDER if abs(p.z - z) < 0.015 and abs(p.x - xj) < 0.05) + 0.004
+        rows.append((m.bm.verts.new(V(xj - 0.03, y - 0.006, z)), m.bm.verts.new(V(xj - 0.026, y, z)), m.bm.verts.new(V(xj + 0.026, y, z)), m.bm.verts.new(V(xj + 0.03, y - 0.006, z))))
+    for r0_, r1_ in zip(rows[:-1], rows[1:]):
+        for k in range(3):
+            m.bm.faces.new([r0_[k], r0_[k + 1], r1_[k + 1], r1_[k]]).material_index = RED
 if VARIANT in ('soldier', 'enemy'):
     by = belt_y + 0.24
     bxk = back_x(by) - 0.065
     m.box((bxk, by, 0), (0.12, 0.3, 0.29), CNV)                                            # 背囊
-    m.cylinder((bxk, by + 0.17, -0.16), (bxk, by + 0.17, 0.16), 0.045, 12, PUT)            # 捲起的外套
+    m.cylinder((bxk, by + 0.17, -0.16), (bxk, by + 0.17, 0.16), 0.045, 12, CNV if WINTER else PUT)   # 捲起的外套（冬季穿在身上，改捲天幕）
 if VARIANT == 'officer':
     for j in range(40):                                                                   # 斜背帶
         t = j / 39
@@ -491,7 +549,30 @@ crown = [p for p in HEADV if p.y > head_top - 0.09]
 hcx = (min(p.x for p in crown) + max(p.x for p in crown)) / 2
 hcz = (min(p.z for p in crown) + max(p.z for p in crown)) / 2
 hrx = (max(p.x for p in crown) - min(p.x for p in crown)) / 2
+hrz = (max(p.z for p in crown) - min(p.z for p in crown)) / 2
+ear_y = G['eye.L'].y - 0.01
 m = MeshBuilder()
+
+
+def band(mb, rows, a0, a1, mi, segs=18):
+    """沒有繞滿一圈的帶狀曲面（護耳、帽簷）。rows：[(y, rx, rz)] 由上而下；角度 0 為正前方。"""
+    grid = []
+    for y, rx_, rz_ in rows:
+        grid.append([mb.bm.verts.new(V(hcx + math.cos(math.radians(a0 + (a1 - a0) * i / segs)) * rx_, y,
+                                       hcz + math.sin(math.radians(a0 + (a1 - a0) * i / segs)) * rz_)) for i in range(segs + 1)])
+    for a, b in zip(grid[:-1], grid[1:]):
+        for i in range(segs):
+            mb.bm.faces.new([a[i], a[i + 1], b[i + 1], b[i]]).material_index = mi
+
+
+def ear_flaps(mb, top_y, grow=0.0):
+    """防寒帽的護耳與護頸：從帽緣垂到下顎線，臉部正面（左右各 62°）留空。"""
+    ring = [p for p in HEADV if abs(p.y - ear_y) < 0.04]
+    rx_ = (max(p.x for p in ring) - min(p.x for p in ring)) / 2 + 0.012 + grow
+    rz_ = (max(p.z for p in ring) - min(p.z for p in ring)) / 2 + 0.012 + grow
+    band(mb, [(top_y, rx_, rz_), (ear_y - 0.02, rx_ + 0.006, rz_ + 0.006), (ear_y - 0.085, rx_ + 0.002, rz_ - 0.004), (ear_y - 0.1, rx_ - 0.012, rz_ - 0.018)], 62, 298, FUR)
+
+
 if VARIANT == 'soldier':
     # 九〇式鉄帽：圓頂、下緣略外張，前有星章
     k = (hrx + 0.03) / 0.125
@@ -502,6 +583,17 @@ if VARIANT == 'soldier':
     m.lathe((hcx + 0.131 * k, y0 + 0.075, hcz), (1, 0.45, 0), [(0, 0.016), (0.005, 0)], 5, BRS, cap0=False)
     for s in (-1, 1):
         m.cylinder((hcx, y0 + 0.01, hcz + s * 0.125 * k), (hcx + 0.035, head_top - 0.225, hcz + s * 0.062), 0.005, 6, CNV)   # 顎紐
+    ear_flaps(m, y0 + 0.02)            # 鉄帽下戴著防寒帽，只露出護耳
+elif WINTER:
+    # 防寒帽：毛皮圓頂帽，前面的護額往上翻，護耳放下
+    r0 = hrx + 0.02
+    y0 = head_top - 0.075
+    k = (hrz + 0.026) / r0
+    rows = [(y0, r0, r0 * k), (y0 + 0.05, r0 - 0.004, (r0 - 0.004) * k), (y0 + 0.085, r0 * 0.8, r0 * 0.8 * k), (y0 + 0.1, r0 * 0.45, r0 * 0.45 * k), (y0 + 0.104, 0.001, 0.001)]
+    band(m, list(reversed(rows)), 0, 360, WOOL, segs=24)
+    band(m, [(y0 + 0.07, r0 + 0.004, (r0 + 0.004) * k), (y0 + 0.068, r0 + 0.016, (r0 + 0.016) * k), (y0 + 0.004, r0 + 0.018, (r0 + 0.018) * k), (y0, r0 + 0.004, (r0 + 0.004) * k)], -64, 64, FUR, segs=12)   # 上翻的護額
+    m.lathe((hcx + r0 + 0.018, y0 + 0.036, hcz), (1, 0, 0), [(0, 0.014), (0.005, 0)], 5, RED if ENEMY else BRS, cap0=False)
+    ear_flaps(m, y0 + 0.06, 0.006)
 else:
     # 軍帽：帽圈（我軍紅色）、較寬的平頂、黑色帽簷、星章
     r0 = hrx + 0.012
@@ -544,6 +636,15 @@ for ob, bone in PARTS:
 bpy.context.view_layer.objects.active = PARTS[0][0]
 bpy.ops.object.convert(target='MESH')
 for ob, bone in PARTS:
+    if callable(bone):
+        grps = {}
+        for v in ob.data.vertices:
+            for n, w in bone(game(ob.matrix_world @ v.co)).items():
+                if w > 0.001:
+                    if n not in grps:
+                        grps[n] = ob.vertex_groups.new(name=n)
+                    grps[n].add([v.index], w, 'REPLACE')
+        continue
     grp = ob.vertex_groups.new(name=bone)
     grp.add(list(range(len(ob.data.vertices))), 1.0, 'REPLACE')
 body.select_set(True)

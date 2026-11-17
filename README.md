@@ -43,10 +43,10 @@ npm run dev
 - **縫隙陰影**：每節車廂用 Blender 烘焙一張 AO 貼圖（`public/models/*_ao.jpg`，第二組 UV）；軍士與馬烘焙到頂點色
 - **車內電燈**：少數幾盞點光源，每幀移到離鏡頭最近的燈泡上（`src/render/interiorLights.js`）
 - **後製**：柔和光暈、色調調整、輕微暗角（`src/render/post.js`）
-- **人物**：MPFB（MakeHuman）產生的人體做成軍服並綁到簡化骨架，沿用原本的程式姿勢（`tools/blender/soldier.py`）
+- **人物**：MPFB（MakeHuman）產生的人體做成軍服並綁到簡化骨架，沿用原本的程式姿勢（`tools/blender/soldier.py`）；車外作戰的步兵與敵軍穿外套、戴防寒帽，外套下襬會跟著雙腿擺動
 - **地景**：枯草／泥土／殘雪混合的地表、落葉後的楊樹與柳樹、枯草叢、紅磚站房、水塔、號誌機、土坯民房（`src/world/`）
 - **特效**：火球轉黑煙、碎屑、硝煙、煤煙與蒸汽，會隨風飄散（`src/weapons/effects.js`）
-- **畫質**：暫停畫面可切換「高／低」；預設依顯示卡自動選擇（內建顯示卡用「低」：關後製、解析度與陰影減半、樹與草減量）
+- **畫質**：暫停畫面可切換「高／低」；預設依顯示卡自動選擇（內建顯示卡用「低」：關後製、解析度與陰影減半、樹與草減量、貼圖邊長減半）。貼圖大小在載入時決定，切換後要重新整理頁面才會套用
 
 貼圖素材放在 `assets/pbr/`（Poly Haven 原檔），由 `python tools/textures/pack.py` 壓縮到 `public/textures/`。
 

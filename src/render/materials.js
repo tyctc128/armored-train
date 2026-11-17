@@ -13,6 +13,21 @@ export function setMaxAnisotropy(n) {
   maxAniso = Math.min(8, n);
 }
 
+// 低畫質：貼圖載入後縮成一半邊長（顯示記憶體約剩四分之一）。要在載入貼圖前設定。
+let halfTextures = false;
+export function setHalfTextures(on) {
+  halfTextures = on;
+}
+function shrink(t) {
+  const im = t.image;
+  if (!halfTextures || !im || im.width < 256) return;
+  const c = document.createElement('canvas');
+  c.width = im.width >> 1;
+  c.height = im.height >> 1;
+  c.getContext('2d').drawImage(im, 0, 0, c.width, c.height);
+  t.image = c; // 同一張圖的各個 repeat 版本共用 source，所以一起換掉
+}
+
 // 取得貼圖（同一張圖不同 repeat 共用同一份影像資料）
 export function tex(name, repeat = 1, srgb = false) {
   const key = `${name}|${repeat}`;
@@ -20,7 +35,8 @@ export function tex(name, repeat = 1, srgb = false) {
   let src = sources.get(name);
   const fresh = !src;
   if (fresh) {
-    src = loader.load(`${import.meta.env.BASE_URL}textures/${name}.jpg`, () => {
+    src = loader.load(`${import.meta.env.BASE_URL}textures/${name}.jpg`, (loaded) => {
+      shrink(loaded);
       for (const [k, t] of variants) if (k.startsWith(`${name}|`)) t.needsUpdate = true;
     });
     sources.set(name, src);
@@ -55,6 +71,7 @@ const SPECS = {
   Coal: { set: 'gravel', rep: 6, n: 1.0, rough: 1.0, metal: 0.0 },
   // 人物
   Wool: { set: 'wool', rep: 22, n: 0.9, rough: 1.0, metal: 0.0, detail: 0.5, gain: 1.9 },
+  Fur: { set: 'wool', rep: 46, n: 1.0, rough: 1.0, metal: 0.0, detail: 0.7, gain: 2.6 },
   WoolDark: { set: 'wool', rep: 22, n: 1.0, rough: 1.0, metal: 0.0, detail: 0.5, gain: 1.9 },
   Leather: { set: 'leather', rep: 10, n: 0.7, rough: 0.75, metal: 0.0, detail: 0.5, gain: 3.0 },
   Boot: { set: 'leather', rep: 8, n: 0.8, rough: 0.7, metal: 0.0, detail: 0.5, gain: 3.0 },
@@ -213,6 +230,8 @@ export function loadCarAO(modelUrl) {
     loader.load(
       `${import.meta.env.BASE_URL}${modelUrl.replace('.glb', '_ao.jpg')}`,
       (t) => {
+        shrink(t);
+        t.needsUpdate = true;
         t.flipY = false; // glTF 的 UV 原點在左上
         t.channel = 1;
         t.colorSpace = THREE.NoColorSpace;
