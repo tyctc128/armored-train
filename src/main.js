@@ -109,6 +109,7 @@ async function init() {
     env.sun.shadow.map?.dispose();
     env.sun.shadow.map = null;
     for (const t of scene.getObjectByName('trees')?.children ?? []) t.count = Math.round(t.userData.full * (hi ? 1 : 0.4));
+    for (const t of scene.getObjectByName('grass')?.children ?? []) t.count = Math.round(t.userData.full * (hi ? 1 : 0.35));
     resize();
     qualityBtn.textContent = `畫質：${hi ? '高' : '低'}（點擊切換）`;
   };

@@ -51,43 +51,64 @@ export function setupEnvironment(renderer, scene) {
 
   scene.fog = new THREE.FogExp2(0xaeb4b6, 0.00017);
 
+  // 天空球：直接取樣 HDR 全景，並在著色器裡把地平線附近混進薄霧（遮住全景裡的遠景樹林、房舍）。
+  // 深度固定在最遠處並做深度測試，所以不論繪製順序，都只會出現在沒有地形與物件的地方。
+  const skyMat = new THREE.ShaderMaterial({
+    uniforms: {
+      tSky: { value: null },
+      uRot: { value: 0 },
+      uIntensity: { value: 0.75 },
+      uHaze: { value: new THREE.Color(0xaeb4b6) },
+    },
+    vertexShader: `
+      varying vec3 vDir;
+      void main() {
+        vDir = position;
+        vec4 p = projectionMatrix * viewMatrix * vec4(position + cameraPosition, 1.0);
+        gl_Position = p.xyww; // 深度 = 最遠
+      }`,
+    fragmentShader: `
+      uniform sampler2D tSky;
+      uniform float uRot;
+      uniform float uIntensity;
+      uniform vec3 uHaze;
+      varying vec3 vDir;
+      void main() {
+        vec3 d = normalize(vDir);
+        float c = cos(uRot), s = sin(uRot);
+        vec3 h = vec3(d.x * c - d.z * s, d.y, d.x * s + d.z * c);
+        vec2 uv = vec2(atan(h.z, h.x) * 0.15915494 + 0.5, asin(clamp(h.y, -1.0, 1.0)) * 0.31830989 + 0.5);
+        vec3 col = texture2D(tSky, uv).rgb * uIntensity;
+        // 仰角 0° 以下全是霧，往上到約 7° 漸漸散去
+        float haze = 1.0 - smoothstep(0.0, 0.12, d.y);
+        col = mix(col, uHaze, haze * 0.92);
+        gl_FragColor = vec4(col, 1.0);
+        #include <tonemapping_fragment>
+        #include <colorspace_fragment>
+      }`,
+    side: THREE.BackSide,
+    depthWrite: false,
+    fog: false,
+  });
+  skyMat.depthFunc = THREE.LessEqualDepth;
+  const skyDome = new THREE.Mesh(new THREE.SphereGeometry(1, 48, 24), skyMat);
+  skyDome.frustumCulled = false;
+  skyDome.renderOrder = -100;
+  skyDome.visible = false;
+  scene.add(skyDome);
+
   new HDRLoader().load(`${import.meta.env.BASE_URL}textures/sky_2k.hdr`, (hdr) => {
     hdr.mapping = THREE.EquirectangularReflectionMapping;
     // 把 HDR 的太陽轉到 SUN_AZ：貼圖中太陽的方位角為 (SUN_U − 0.5)·2π
     const rot = (SUN_U - 0.5) * Math.PI * 2 - az;
-    scene.background = hdr;
-    scene.backgroundRotation.set(0, rot, 0);
-    scene.backgroundIntensity = 0.75;
+    skyMat.uniforms.tSky.value = hdr;
+    skyMat.uniforms.uRot.value = rot;
+    skyDome.visible = true;
     scene.environment = hdr;
     scene.environmentRotation.set(0, rot, 0);
     scene.environmentIntensity = 1.0;
     scene.remove(sky, hemi);
   });
-
-  // 地平線的霧靄：遮住 HDR 全景裡的遠景（樹林、房舍），讓遠方融進冬天的薄霧
-  const hazeCanvas = document.createElement('canvas');
-  hazeCanvas.width = 4;
-  hazeCanvas.height = 256;
-  const hg = hazeCanvas.getContext('2d');
-  const grad = hg.createLinearGradient(0, 0, 0, 256);
-  grad.addColorStop(0, 'rgba(255,255,255,0)');
-  grad.addColorStop(0.45, 'rgba(255,255,255,0.55)');
-  grad.addColorStop(0.62, 'rgba(255,255,255,1)');
-  grad.addColorStop(1, 'rgba(255,255,255,1)');
-  hg.fillStyle = grad;
-  hg.fillRect(0, 0, 4, 256);
-  const haze = new THREE.Mesh(
-    new THREE.CylinderGeometry(22000, 22000, 5200, 48, 1, true),
-    // 不透明佇列＋自訂混合：在地形之前畫，只蓋住天空背景，不會蓋到地形
-    new THREE.MeshBasicMaterial({
-      color: 0xaeb4b6, map: new THREE.CanvasTexture(hazeCanvas), side: THREE.BackSide, fog: false,
-      blending: THREE.CustomBlending, blendSrc: THREE.SrcAlphaFactor, blendDst: THREE.OneMinusSrcAlphaFactor,
-      depthTest: false, depthWrite: false,
-    }),
-  );
-  haze.renderOrder = -10;
-  haze.frustumCulled = false;
-  scene.add(haze);
 
   return {
     sun,
@@ -96,7 +117,6 @@ export function setupEnvironment(renderer, scene) {
     update(focus) {
       sun.position.copy(focus).addScaledVector(sunDir, 400);
       sun.target.position.copy(focus);
-      haze.position.set(focus.x, focus.y + 600, focus.z);
     },
   };
 }

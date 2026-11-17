@@ -201,23 +201,28 @@ function winterGroundMaterial() {
         '#include <map_fragment>',
         `vec2 wp = vTerrPos.xz;
         float camD = distance(vTerrPos, cameraPosition);
-        float farK = smoothstep(25.0, 260.0, camD);
-        vec3 grass = mix(texture2D(map, wp / 5.0).rgb, texture2D(map, wp / 43.0).rgb, farK);
+        float farK = smoothstep(60.0, 600.0, camD);
+        // 近處細節與大尺度取樣相乘，遠近都有草叢的濃淡，不會糊成一片
+        vec3 gNear = texture2D(map, wp / 5.0).rgb;
+        vec3 gFar = texture2D(map, wp / 43.0).rgb;
+        vec3 grass = mix(gNear, gFar, farK) * (0.55 + 1.5 * dot(gFar, vec3(0.333)));
         vec3 soil = mix(texture2D(uDirt, wp / 4.0).rgb, texture2D(uDirt, wp / 37.0).rgb, farK);
-        vec3 snowC = mix(texture2D(uSnow, wp / 6.0).rgb, vec3(0.86, 0.88, 0.92), farK);
+        vec3 snowC = mix(texture2D(uSnow, wp / 6.0).rgb * 0.86, vec3(0.7, 0.73, 0.78), farK);
         float macro = tFbm(wp / 110.0);
         // 枯草的濃淡與色調變化（黃褐～灰褐）
-        grass *= mix(vec3(0.72, 0.68, 0.6), vec3(1.12, 1.05, 0.92), macro) * (0.8 + 0.4 * vSplat.b);
+        grass *= mix(vec3(0.5, 0.5, 0.46), vec3(0.86, 0.82, 0.7), macro) * (0.8 + 0.4 * vSplat.b);
         float bare = smoothstep(0.6, 0.78, tFbm(wp / 19.0 + 4.7));
         float dirtW = clamp(vSplat.r + bare * 0.55, 0.0, 1.0);
-        float patch = smoothstep(0.56, 0.68, tFbm(wp / 27.0 + 11.3)) * smoothstep(0.35, 0.6, tFbm(wp / 140.0 + 2.0));
+        float snowPatch = smoothstep(0.56, 0.68, tFbm(wp / 27.0 + 11.3)) * smoothstep(0.42, 0.66, tFbm(wp / 70.0 + 2.0));
         // 平地的殘雪只積在草叢之間，草尖仍會露出來
         float tuft = dot(texture2D(map, wp / 5.0).rgb, vec3(0.333));
-        float thin = patch * (1.0 - vSplat.r) * 0.8 * (1.0 - smoothstep(0.1, 0.3, tuft) * mix(0.75, 0.35, farK));
+        float thin = snowPatch * (1.0 - vSplat.r) * mix(0.8, 0.5, farK) * (1.0 - smoothstep(0.1, 0.3, tuft) * mix(0.75, 0.35, farK));
         gSnowW = clamp(vSplat.g * 1.4 + thin, 0.0, 1.0);
-        vec3 ground = mix(grass, soil * vec3(0.82, 0.76, 0.68), dirtW);
+        vec3 ground = mix(grass, soil * vec3(0.52, 0.5, 0.47), dirtW);
         diffuseColor.rgb = mix(ground, snowC, gSnowW);`,
       )
+      // 粗糙的地表在掠射角不該像鏡子一樣映出天空（否則遠處地面會泛白）
+      .replace('#include <aomap_fragment>', '#include <aomap_fragment>\nreflectedLight.indirectSpecular *= 0.08;\nreflectedLight.directSpecular *= 0.3;')
       .replace(
         '#include <normal_fragment_maps>',
         `#include <normal_fragment_maps>

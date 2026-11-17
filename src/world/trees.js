@@ -133,3 +133,79 @@ export function buildTrees(spots) {
   });
   return group;
 }
+
+// 枯草叢：畫布上畫一叢乾草葉，貼在兩片交叉的面片上，沿鐵道兩側大量散布，讓近處地面有立體感
+function drawGrass(seed) {
+  const W = 256;
+  const H = 256;
+  const c = document.createElement('canvas');
+  c.width = W;
+  c.height = H;
+  const g = c.getContext('2d');
+  const rng = mulberry32(seed);
+  g.lineCap = 'round';
+  for (let i = 0; i < 150; i++) {
+    const x0 = W / 2 + (rng() - 0.5) * W * 0.5;
+    const lean = (rng() - 0.5) * 1.3;
+    const len = H * (0.35 + rng() * 0.6);
+    const x1 = x0 + lean * len * 0.5;
+    const y1 = H - len;
+    const k = rng();
+    g.strokeStyle = `rgb(${(150 + k * 60) | 0},${(125 + k * 50) | 0},${(72 + k * 30) | 0})`;
+    g.lineWidth = 1.2 + rng() * 2.2;
+    g.beginPath();
+    g.moveTo(x0, H);
+    g.quadraticCurveTo(x0 + lean * len * 0.12, H - len * 0.6, x1, y1);
+    g.stroke();
+  }
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 4;
+  return tex;
+}
+
+// spots：[{ x, y, z, h, rot, v }]
+export function buildGrass(spots) {
+  const group = new THREE.Group();
+  group.name = 'grass';
+  const pos = [];
+  const uv = [];
+  const nrm = [];
+  const idx = [];
+  for (let k = 0; k < 2; k++) {
+    const a = (k * Math.PI) / 2;
+    const dx = Math.cos(a) * 0.5;
+    const dz = Math.sin(a) * 0.5;
+    const o = pos.length / 3;
+    pos.push(-dx, 0, -dz, dx, 0, dz, dx, 1, dz, -dx, 1, -dz);
+    uv.push(0, 0, 1, 0, 1, 1, 0, 1);
+    for (let i = 0; i < 4; i++) nrm.push(0, 1, 0);
+    idx.push(o, o + 1, o + 2, o, o + 2, o + 3);
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  geo.setAttribute('normal', new THREE.Float32BufferAttribute(nrm, 3));
+  geo.setIndex(idx);
+  const m = new THREE.Matrix4();
+  const q = new THREE.Quaternion();
+  const s = new THREE.Vector3();
+  const p = new THREE.Vector3();
+  [5, 19].forEach((seed, vi) => {
+    const mine = spots.filter((t) => (t.v < 0.5 ? 0 : 1) === vi);
+    const mat = new THREE.MeshStandardMaterial({ map: drawGrass(seed), alphaTest: 0.35, alphaToCoverage: true, side: THREE.DoubleSide, roughness: 1, metalness: 0 });
+    const mesh = new THREE.InstancedMesh(geo, mat, mine.length);
+    mine.forEach((t, i) => {
+      q.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, t.rot);
+      s.set(t.h * 1.5, t.h, t.h * 1.5);
+      p.set(t.x, t.y, t.z);
+      m.compose(p, q, s);
+      mesh.setMatrixAt(i, m);
+    });
+    mesh.instanceMatrix.needsUpdate = true;
+    mesh.receiveShadow = true;
+    mesh.userData.full = mine.length;
+    group.add(mesh);
+  });
+  return group;
+}

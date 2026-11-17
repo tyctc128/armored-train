@@ -2,8 +2,8 @@ import * as THREE from 'three';
 import { worldMaterial } from '../render/materials.js';
 import { mulberry32 } from '../core/math.js';
 import { fbm } from './noise.js';
-import { distToTrack, trackZ, trackY } from './track.js';
-import { buildTrees } from './trees.js';
+import { distToTrack, trackZ, trackY, TRACK_X0, TRACK_X1 } from './track.js';
+import { buildTrees, buildGrass } from './trees.js';
 import { buildStation, buildWaterTower, buildSemaphore, housePrototype } from './buildings.js';
 
 // 樹林、村落、起點站
@@ -33,6 +33,18 @@ export function buildScenery(scene, terrain) {
     spots.push({ x, y: y - 0.2, z, h: 9 + rng() * 9, rot: rng() * Math.PI, v: rng() });
   }
   group.add(buildTrees(spots));
+
+  // 枯草叢：鐵道兩側 6–90 m 的帶狀範圍（玩家視線最常停留的地方）
+  const tufts = [];
+  for (let i = 0; i < 26000; i++) {
+    const x = TRACK_X0 - 100 + rng() * (TRACK_X1 - TRACK_X0 + 200);
+    const side = rng() < 0.5 ? -1 : 1;
+    const d = 6 + Math.pow(rng(), 1.6) * 84;
+    const z = trackZ(x) + side * d;
+    if (terrain.roadBlend(x, z) > 0.2) continue;
+    tufts.push({ x, y: terrain.heightAt(x, z) - 0.03, z, h: 0.35 + rng() * 0.55, rot: rng() * Math.PI, v: rng() });
+  }
+  group.add(buildGrass(tufts));
 
   // 村落：鐵道北側約 650 m、南側約 900 m 各一群土坯民房（草頂、紙窗，門朝南）
   const houses = [];

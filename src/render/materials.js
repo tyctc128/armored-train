@@ -259,7 +259,9 @@ export function worldMaterial(set, scale, { color = 0xffffff, roughness = 1, met
         float triFar = smoothstep(30.0, 200.0, distance(vTriPos, cameraPosition));
         triC = mix(triC, texture2D(uTex, triP.xz / 7.3).rgb, triFar * 0.7);
         diffuseColor.rgb *= triC * 2.2;`,
-      );
+      )
+      // 粗糙表面在掠射角不該映出天空
+      .replace('#include <aomap_fragment>', '#include <aomap_fragment>\nreflectedLight.indirectSpecular *= 0.1;');
   };
   return m;
 }
