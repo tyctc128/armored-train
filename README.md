@@ -34,6 +34,22 @@ npm run dev
 - 第四關「山谷伏擊」：稜線後的敵迫砲陣地逐發試射；電源車九七式曲射歩兵砲（曲射射表）依觀測哨回報修正彈著（`src/enemy/battery.js`）
 - 第五關「鋼鐵對決」：敵裝甲列車（4 節）沿同一條鐵道駛來對峙砲戰；分車耐久與穿甲、砲手對敵車自動改用尖鋭弾（`src/enemy/enemyTrain.js`）
 
+## 寫實視覺
+
+畫面以「上了色的老照片」為目標，時空設定在昭和九年十二月的滿洲平原（考據與素材出處見 `docs/references.md`）。
+
+- **光照**：實拍的冬季全景 HDR 當天空與環境光，太陽仰角約 20°；地平線在著色器裡混入薄霧（`src/world/environment.js`）
+- **材質**：模型的平塗材質在載入時換成帶法線／粗糙度細節的 PBR 材質，並依高度加上揚塵、煤煙、雨痕、掉漆（`src/render/materials.js`）
+- **縫隙陰影**：每節車廂用 Blender 烘焙一張 AO 貼圖（`public/models/*_ao.jpg`，第二組 UV）；軍士與馬烘焙到頂點色
+- **車內電燈**：少數幾盞點光源，每幀移到離鏡頭最近的燈泡上（`src/render/interiorLights.js`）
+- **後製**：柔和光暈、色調調整、輕微暗角（`src/render/post.js`）
+- **人物**：MPFB（MakeHuman）產生的人體做成軍服並綁到簡化骨架，沿用原本的程式姿勢（`tools/blender/soldier.py`）
+- **地景**：枯草／泥土／殘雪混合的地表、落葉後的楊樹與柳樹、枯草叢、紅磚站房、水塔、號誌機、土坯民房（`src/world/`）
+- **特效**：火球轉黑煙、碎屑、硝煙、煤煙與蒸汽，會隨風飄散（`src/weapons/effects.js`）
+- **畫質**：暫停畫面可切換「高／低」；預設依顯示卡自動選擇（內建顯示卡用「低」：關後製、解析度與陰影減半、樹與草減量）
+
+貼圖素材放在 `assets/pbr/`（Poly Haven 原檔），由 `python tools/textures/pack.py` 壓縮到 `public/textures/`。
+
 ## Blender 模型
 
 8 節車廂模型都由 `tools/blender/` 的 Python 腳本驅動 Blender 產生；共用零件（車體、車內結構、內裝、底架、機槍、機槍塔、窗）在 `parts.py`。
@@ -53,6 +69,11 @@ npm run dev
 powershell -File tools/blender/build_all.ps1
 # 或單節（Linux／macOS）：
 blender -b --factory-startup -P tools/blender/gun_car.py -- B
+# 車廂重建後，把烘焙的 AO 貼圖壓成灰階：
+python tools/textures/shrink_ao.py
+# 軍士（需先在 Blender 安裝 MPFB 外掛；不要加 --factory-startup）與戰馬：
+blender -b -P tools/blender/soldier.py -- soldier   # 另有 crew、officer、enemy
+blender -b --factory-startup -P tools/blender/horse.py
 ```
 
 加參數 `interior` 只渲染車內檢查圖（不輸出模型），輸出到環境變數 `MODEL_SCRATCH` 指定的資料夾。

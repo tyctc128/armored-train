@@ -6,6 +6,6 @@ export default defineConfig({
   server: {
     port: 5173,
     // Blender 輸出模型時檔案會被鎖住，不監看這些資料夾以免開發伺服器中斷
-    watch: { ignored: ['**/public/models/**', '**/public/draco/**', '**/assets/**', '**/docs/**', '**/tools/**'] },
+    watch: { ignored: ['**/public/models/**', '**/public/draco/**', '**/public/textures/**', '**/assets/**', '**/docs/**', '**/tools/**'] },
   },
 });

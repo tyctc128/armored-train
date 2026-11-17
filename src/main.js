@@ -6,6 +6,9 @@ import { Track } from './world/track.js';
 import { Terrain } from './world/terrain.js';
 import { buildScenery } from './world/scenery.js';
 import { setupEnvironment } from './world/environment.js';
+import { setupPost } from './render/post.js';
+import { InteriorLights } from './render/interiorLights.js';
+import { setMaxAnisotropy } from './render/materials.js';
 import { createMaterials, FLOOR_Y } from './train/carModels.js';
 import { Train, NOTCHES } from './train/train.js';
 import { loadModels } from './train/models.js';
@@ -48,14 +51,19 @@ async function init() {
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 0.85;
+  renderer.toneMappingExposure = 1.0;
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(70, 1, 0.05, 40000);
+
+  const debugView = { pos: null, look: null };
+  setMaxAnisotropy(renderer.capabilities.getMaxAnisotropy());
+  const post = setupPost(renderer, scene, camera);
 
   function resize() {
     const w = innerWidth;
     const h = innerHeight;
     renderer.setSize(w, h, false);
+    post.setSize(w, h, renderer.getPixelRatio());
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
     overlay.width = w;
@@ -72,6 +80,50 @@ async function init() {
   const terrain = new Terrain();
   scene.add(terrain.mesh);
   buildScenery(scene, terrain);
+
+  // 畫質：高（後製、4K 陰影、全部樹木）／低（關後製、解析度與陰影減半、樹木減量）。
+  // 預設依顯示卡自動判斷：內建顯示卡或軟體算圖用「低」；選擇會記住。
+  const QUALITY_KEY = 'armoredTrain.quality';
+  const detectQuality = () => {
+    try {
+      const gl = renderer.getContext();
+      const ext = gl.getExtension('WEBGL_debug_renderer_info');
+      const name = ext ? String(gl.getParameter(ext.UNMASKED_RENDERER_WEBGL)) : '';
+      return /swiftshader|llvmpipe|software|intel(?!.*arc)|mali|adreno|powervr|apple gpu/i.test(name) ? 'low' : 'high';
+    } catch {
+      return 'high';
+    }
+  };
+  let qualityLevel = 'high';
+  try {
+    qualityLevel = localStorage.getItem(QUALITY_KEY) ?? detectQuality();
+  } catch {
+    qualityLevel = detectQuality();
+  }
+  const qualityBtn = document.getElementById('pause-quality');
+  const applyQuality = () => {
+    const hi = qualityLevel === 'high';
+    post.enabled = hi;
+    renderer.setPixelRatio(Math.min(devicePixelRatio, hi ? 1.5 : 1));
+    env.sun.shadow.mapSize.setScalar(hi ? 4096 : 2048);
+    env.sun.shadow.map?.dispose();
+    env.sun.shadow.map = null;
+    for (const t of scene.getObjectByName('trees')?.children ?? []) t.count = Math.round(t.userData.full * (hi ? 1 : 0.4));
+    for (const t of scene.getObjectByName('grass')?.children ?? []) t.count = Math.round(t.userData.full * (hi ? 1 : 0.35));
+    resize();
+    qualityBtn.textContent = `畫質：${hi ? '高' : '低'}（點擊切換）`;
+  };
+  applyQuality();
+  qualityBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    qualityLevel = qualityLevel === 'high' ? 'low' : 'high';
+    try {
+      localStorage.setItem(QUALITY_KEY, qualityLevel);
+    } catch {
+      /* 無法存檔時只在本次生效 */
+    }
+    applyQuality();
+  });
 
   ui.setLoading('依史料校正彈道、計算射表…');
   await tick();
@@ -132,6 +184,7 @@ async function init() {
     },
   }, models);
   game.train = train;
+  const interiorLights = new InteriorLights(scene, train);
   const railBreak = new RailBreak(scene, track, game);
   game.railBreak = railBreak;
   train.updateTransforms(0);
@@ -737,11 +790,17 @@ async function init() {
       audio.updateEngine(dt, train.speed, loco.chimney.getWorldPosition(locoPos));
     }
     applyCamera();
+    if (debugView.pos) {
+      // 開發用：自由鏡頭（檢查場景用）
+      camera.position.copy(debugView.pos);
+      camera.lookAt(debugView.look);
+    }
     if (game.mode === 'third') focus.copy(orbitCenter);
     else focus.copy(camera.position);
     env.update(focus);
     audio.setListener(camera);
-    renderer.render(scene, camera);
+    interiorLights.update(camera);
+    post.render();
     drawOverlay();
     updateHud(dt);
     input.endFrame();
@@ -752,7 +811,7 @@ async function init() {
     const steps = (n, dt = 1 / 60) => {
       for (let i = 0; i < n; i++) step(dt);
     };
-    window.__game = { game, camera, renderer, scene, stations, player, train, targets, steps, railBreak, input, damage, battery, enemyTrain, guide, openGuide, closeGuide, tutorial, get mission() { return mission; } };
+    window.__game = { game, camera, renderer, scene, interiorLights, post, debugView, THREE, stations, player, train, targets, steps, railBreak, input, damage, battery, enemyTrain, guide, openGuide, closeGuide, tutorial, get mission() { return mission; } };
   }
 
   ui.loading.classList.add('hidden');

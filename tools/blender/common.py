@@ -350,7 +350,7 @@ def select_tree(root):
     bpy.context.view_layer.objects.active = root
 
 
-def export_glb(root, path):
+def export_glb(root, path, vertex_color=False):
     os.makedirs(os.path.dirname(path), exist_ok=True)
     select_tree(root)
     bpy.ops.export_scene.gltf(
@@ -362,6 +362,7 @@ def export_glb(root, path):
         export_yup=True,
         export_cameras=False,
         export_lights=False,
+        export_vertex_color='ACTIVE' if vertex_color else 'MATERIAL',
         export_image_format='JPEG',
         export_jpeg_quality=88,
         # Draco 幾何壓縮（遊戲端以 DRACOLoader 解碼）
@@ -371,6 +372,65 @@ def export_glb(root, path):
         export_draco_normal_quantization=10,
         export_draco_texcoord_quantization=12,
     )
+
+
+def bake_ao(root, path, size=2048, samples=48, distance=1.2):
+    """把整節車廂的環境光遮蔽（縫隙、角落、內裝接觸處的暗部）烘焙成一張貼圖。
+    所有網格共用一張圖，展開在第二組 UV（名稱 AO）；遊戲端當作 aoMap 使用。
+    鉚釘等極小零件（名稱含 Rivets）不參與展開，以免佔掉貼圖空間。"""
+    scene = bpy.context.scene
+    meshes = []
+    stack = [root]
+    while stack:
+        ob = stack.pop()
+        stack.extend(ob.children)
+        if ob.type == 'MESH':
+            meshes.append(ob)
+    # 先套用修改器（倒角等），烘焙與輸出才會用同一份幾何
+    bpy.ops.object.select_all(action='DESELECT')
+    for ob in meshes:
+        ob.select_set(True)
+    bpy.context.view_layer.objects.active = meshes[0]
+    bpy.ops.object.convert(target='MESH')
+    targets = [ob for ob in meshes if 'Rivets' not in ob.name]
+    bpy.ops.object.select_all(action='DESELECT')
+    for ob in targets:
+        ob.select_set(True)
+        uv = ob.data.uv_layers.new(name='AO')
+        ob.data.uv_layers.active = uv   # 展開與烘焙用；算圖仍用第一組
+    bpy.context.view_layer.objects.active = targets[0]
+    bpy.ops.object.mode_set(mode='EDIT')
+    bpy.ops.mesh.select_all(action='SELECT')
+    bpy.ops.uv.smart_project(angle_limit=math.radians(66), island_margin=0.0015, area_weight=0.0, scale_to_bounds=False)
+    bpy.ops.object.mode_set(mode='OBJECT')
+
+    img = bpy.data.images.new('AO_bake', size, size, alpha=False)
+    img.generated_color = (1, 1, 1, 1)
+    nodes = []
+    for m in {s.material for ob in targets for s in ob.material_slots if s.material}:
+        n = m.node_tree.nodes.new('ShaderNodeTexImage')
+        n.image = img
+        m.node_tree.nodes.active = n
+        nodes.append((m, n))
+    scene.render.engine = 'CYCLES'
+    scene.cycles.device = 'CPU'
+    scene.cycles.samples = samples
+    scene.cycles.use_denoising = False
+    if scene.world is None:
+        scene.world = bpy.data.worlds.new('BakeWorld')
+    scene.world.light_settings.distance = distance
+    scene.render.bake.margin = 6
+    bpy.ops.object.bake(type='AO')
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    img.filepath_raw = path
+    img.file_format = 'JPEG'
+    scene.render.image_settings.quality = 76
+    img.save()
+    for m, n in nodes:
+        m.node_tree.nodes.remove(n)
+    for ob in targets:
+        ob.data.uv_layers.active = ob.data.uv_layers[0]
+    print('AO', path, os.path.getsize(path))
 
 
 def save_blend(path):

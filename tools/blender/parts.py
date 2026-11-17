@@ -18,7 +18,7 @@ import os
 
 from common import (
     PROJECT, MeshBuilder, empty, reset_scene, camo_texture, paint_texture, wood_texture,
-    material, export_glb, save_blend, render_preview,
+    material, export_glb, save_blend, render_preview, bake_ao,
 )
 
 Y0 = 1.1      # 車體底緣（軌頂起算）
@@ -201,6 +201,7 @@ class Kit:
 
     def export(self, name, cam_target=(0, 2.4, 0), cam_pos=(-13, 6.5, -14)):
         glb = os.path.join(PROJECT, 'public', 'models', f'{name}.glb')
+        bake_ao(self.root, os.path.join(PROJECT, 'public', 'models', f'{name}_ao.jpg'))
         export_glb(self.root, glb)
         save_blend(os.path.join(PROJECT, 'assets', 'blender', f'{name}.blend'))
         render_preview(os.path.join(PROJECT, 'docs', 'preview', f'{name}.png'), target=cam_target, cam_pos=cam_pos)
