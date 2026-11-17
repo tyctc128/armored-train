@@ -3,7 +3,7 @@
 
 執行（不要加 --factory-startup，需要已安裝的 MPFB 外掛）：
   blender -b -P tools/blender/soldier.py -- soldier   # 步兵：九〇式鉄帽、三八式歩兵銃、彈盒、背囊
-  blender -b -P tools/blender/soldier.py -- crew      # 車組員：軍帽、無步槍
+  blender -b -P tools/blender/soldier.py -- crew      # 車組員：白色作業衣、軟帽、無步槍
   blender -b -P tools/blender/soldier.py -- officer   # 軍官：軍帽、軍刀、望遠鏡、手槍套
   blender -b -P tools/blender/soldier.py -- enemy     # 架空敵軍：灰綠軍服、平頂軍帽、步槍
 
@@ -37,6 +37,7 @@ from common import (  # noqa: E402
 VARIANT = (script_args() or ['soldier'])[0]
 assert VARIANT in ('soldier', 'crew', 'officer', 'enemy')
 ENEMY = VARIANT == 'enemy'
+CREW = VARIANT == 'crew'     # 車內乘員：試驗影片中穿白色作業衣、戴軟帽
 WINTER = VARIANT in ('soldier', 'enemy')   # 車外作戰的人穿防寒外套、戴防寒帽；車內乘員穿軍衣
 HEIGHT = 1.66
 
@@ -45,7 +46,7 @@ bpy.ops.preferences.addon_enable(module='bl_ext.user_default.mpfb')
 from bl_ext.user_default.mpfb.services.humanservice import HumanService  # noqa: E402
 from bl_ext.user_default.mpfb.services.targetservice import TargetService  # noqa: E402
 
-M_WOOL = material('Wool', '#5d6a63' if ENEMY else '#75643f', rough=0.95)   # 昭五式：帶赤茶褐色
+M_WOOL = material('Wool', '#5d6a63' if ENEMY else '#c4bca6' if CREW else '#75643f', rough=0.95)   # 昭五式：帶赤茶褐色；作業衣：未染色的白棉布
 M_PUTTEE = material('WoolDark', '#46504a' if ENEMY else '#695a3b', rough=0.95)
 M_SKIN = material('Skin', '#c79a74', rough=0.62)
 M_LEATHER = material('Leather', '#5a3b22', rough=0.55)
@@ -449,7 +450,7 @@ if WINTER:
             m.lathe((front_x(y, z) + 0.001, y, z), (1, 0, 0), [(0, 0.012), (0.007, 0.008), (0.01, 0)], 10, BRS, cap0=False)
 else:
     tube(m, [(collar_y - 0.05, nx, nz, nrx + 0.04, nrz + 0.04), (collar_y - 0.015, nx, nz, nrx + 0.02, nrz + 0.02), (collar_y + 0.03, nx, nz, nrx + 0.014, nrz + 0.014), (collar_y + 0.03, nx, nz, nrx + 0.003, nrz + 0.003)], WOOL)
-    for s_ in (-1, 1):
+    for s_ in (() if CREW else (-1, 1)):     # 作業衣沒有領章
         m.box((nx + nrx * 0.93 + 0.026, collar_y + 0.008, s_ * 0.03), (0.006, 0.02, 0.032), RED)
     for j in range(5):
         y = belt_y + 0.06 + j * (collar_y - 0.09 - belt_y - 0.06) / 4
@@ -461,7 +462,7 @@ else:
         patch(m, py + 0.022, py + 0.058, s_ * 0.09 - 0.05, s_ * 0.09 + 0.05, 0.008, WOOL)       # 袋蓋
         m.lathe((fx + 0.009, py + 0.03, s_ * 0.09), (1, 0, 0), [(0, 0.007), (0.005, 0)], 8, BRS, cap0=False)
 SHOULDER = [p for p, r in CLOTH if r in ('Spine', 'ShoulderL', 'ShoulderR')]
-for s_ in (-1, 1):       # 肩章：緋色呢料，橫置於肩頭，順著肩線的斜度貼在衣服上
+for s_ in (() if CREW else (-1, 1)):       # 肩章：緋色呢料，橫置於肩頭，順著肩線的斜度貼在衣服上（作業衣沒有）
     zj = JP['ShoulderL' if s_ < 0 else 'ShoulderR'].z
     xj = JP['ShoulderL'].x
     rows = []
@@ -594,6 +595,16 @@ elif WINTER:
     band(m, [(y0 + 0.07, r0 + 0.004, (r0 + 0.004) * k), (y0 + 0.068, r0 + 0.016, (r0 + 0.016) * k), (y0 + 0.004, r0 + 0.018, (r0 + 0.018) * k), (y0, r0 + 0.004, (r0 + 0.004) * k)], -64, 64, FUR, segs=12)   # 上翻的護額
     m.lathe((hcx + r0 + 0.018, y0 + 0.036, hcz), (1, 0, 0), [(0, 0.014), (0.005, 0)], 5, RED if ENEMY else BRS, cap0=False)
     ear_flaps(m, y0 + 0.06, 0.006)
+elif CREW:
+    # 軟帽（作業帽）：貼著頭的低圓頂、短布簷、前有星章
+    r0 = hrx + 0.012
+    y0 = head_top - 0.06
+    k = (hrz + 0.014) / r0
+    rows = [(y0, r0, r0 * k), (y0 + 0.04, r0 + 0.002, (r0 + 0.002) * k), (y0 + 0.066, r0 * 0.86, r0 * 0.86 * k), (y0 + 0.08, r0 * 0.5, r0 * 0.5 * k), (y0 + 0.084, 0.001, 0.001)]
+    band(m, list(reversed(rows)), 0, 360, PUT, segs=24)
+    band(m, [(y0 + 0.006, r0, r0 * k), (y0 - 0.004, r0 + 0.05, (r0 + 0.05) * k)], -48, 48, PUT, segs=10)     # 短簷
+    band(m, [(y0 - 0.006, r0 + 0.05, (r0 + 0.05) * k), (y0 + 0.004, r0, r0 * k)], -48, 48, PUT, segs=10)
+    m.lathe((hcx + r0 + 0.003, y0 + 0.03, hcz), (1, 0, 0), [(0, 0.012), (0.004, 0)], 5, BRS, cap0=False)
 else:
     # 軍帽：帽圈（我軍紅色）、較寬的平頂、黑色帽簷、星章
     r0 = hrx + 0.012
@@ -697,6 +708,31 @@ for ob in [body]:
     col.data.foreach_get('color', buf)
     buf = buf.reshape(-1, 4)
     buf[:, :3] = 0.5 + 0.5 * buf[:, :3]
+    # 臉部膚色變化（沒有皮膚貼圖，改畫在頂點色上）：臉頰、鼻頭、耳朵偏紅（十二月的寒風），
+    # 下巴與上唇有刮過鬍子的青灰，眼窩略暗，並加一點不均勻
+    skin_v = set()
+    for poly in ob.data.polygons:
+        if poly.material_index == SKIN:
+            skin_v.update(poly.vertices)
+    eye = (G['eye.L'] + G['eye.R']) / 2
+    ear_r = max(abs(p_.z) for p_ in HEADV)
+    rnd = np.random.default_rng(7)
+    for vi in skin_v:
+        g = game(ob.data.vertices[vi].co)
+        if g.y < collar_y:
+            continue          # 手
+        front = max(0.0, min(1.0, (g.x - (eye.x - 0.05)) / 0.04))
+        dy = g.y - eye.y
+        cheek = front * math.exp(-((dy + 0.04) / 0.028) ** 2) * min(1.0, abs(g.z) / 0.02 + 0.6)
+        ear = max(0.0, min(1.0, (abs(g.z) - ear_r * 0.86) / (ear_r * 0.1))) * (1.0 if abs(dy) < 0.05 else 0.3)
+        red = min(1.0, cheek * 0.8 + ear * 0.7)
+        beard = front * max(0.0, min(1.0, (-dy - 0.062) / 0.02)) * max(0.0, min(1.0, (dy + 0.135) / 0.02))
+        socket = front * math.exp(-(dy / 0.012) ** 2) * math.exp(-((abs(g.z) - abs(G['eye.L'].z)) / 0.022) ** 2)
+        n = 1.0 + (rnd.random() - 0.5) * 0.05
+        c = buf[vi, :3]
+        c[0] *= n * (1 - 0.10 * beard) * (1 - 0.14 * socket)
+        c[1] *= n * (1 - 0.13 * red) * (1 - 0.08 * beard) * (1 - 0.16 * socket)
+        c[2] *= n * (1 - 0.17 * red) * (1 - 0.04 * beard) * (1 - 0.16 * socket)
     col.data.foreach_set('color', buf.ravel())
 
 name = f'crew_{VARIANT}'

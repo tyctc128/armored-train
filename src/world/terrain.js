@@ -103,7 +103,8 @@ export class Terrain {
       const v = fbm(this.n2, x / 400, z / 400, 3) * 0.5 + 0.5;
       let dirt = smoothstep(0.12, 0.35, slope);
       dirt = Math.max(dirt, this.roadBlend(x, z) * 0.95, (1 - smoothstep(4, 14, distToTrack(x, z))) * 0.75);
-      const snow = smoothstep(150, 320, y) * (1 - smoothstep(0.35, 0.6, slope));
+      // 試驗影片（1934 年 12 月）中沿線丘陵與平地都沒有積雪，所以只在最高的山頭留一點薄雪
+      const snow = smoothstep(450, 720, y) * (1 - smoothstep(0.35, 0.6, slope)) * 0.08;
       splat[i * 3] = dirt;
       splat[i * 3 + 1] = snow;
       splat[i * 3 + 2] = v;
@@ -217,7 +218,7 @@ function winterGroundMaterial() {
         // 平地的殘雪只積在草叢之間，草尖仍會露出來
         float tuft = dot(texture2D(map, wp / 5.0).rgb, vec3(0.333));
         float thin = snowPatch * (1.0 - vSplat.r) * mix(0.8, 0.5, farK) * (1.0 - smoothstep(0.1, 0.3, tuft) * mix(0.75, 0.35, farK));
-        gSnowW = clamp(vSplat.g * 1.4 + thin, 0.0, 1.0);
+        gSnowW = clamp(vSplat.g * 1.4 + thin * 0.0, 0.0, 1.0); // 平地殘雪依影片拿掉（thin 保留以便日後做下雪的關卡）
         vec3 ground = mix(grass, soil * vec3(0.52, 0.5, 0.47), dirtW);
         diffuseColor.rgb = mix(ground, snowC, gSnowW);`,
       )
