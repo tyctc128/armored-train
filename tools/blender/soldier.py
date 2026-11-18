@@ -48,7 +48,11 @@ from bl_ext.user_default.mpfb.services.targetservice import TargetService  # noq
 
 M_WOOL = material('Wool', '#5d6a63' if ENEMY else '#c4bca6' if CREW else '#75643f', rough=0.95)   # 昭五式：帶赤茶褐色；作業衣：未染色的白棉布
 M_PUTTEE = material('WoolDark', '#46504a' if ENEMY else '#695a3b', rough=0.95)
-M_SKIN = material('Skin', '#c79a74', rough=0.62)
+# 皮膚：MakeHuman 社群的皮膚貼圖（CC0），由 tools/textures/skin.py 調成東亞膚色；人體保留 MakeHuman 的 UV
+SKIN_IMG = os.path.join(PROJECT, 'assets', 'pbr', 'skin_asian.jpg')
+M_SKIN = material('Skin', '#ffffff', rough=0.62, image=bpy.data.images.load(SKIN_IMG) if os.path.exists(SKIN_IMG) else None)
+if not os.path.exists(SKIN_IMG):
+    M_SKIN = material('Skin', '#c79a74', rough=0.62)
 M_LEATHER = material('Leather', '#5a3b22', rough=0.55)
 M_BOOT = material('Boot', '#33241a', rough=0.5)
 M_HELM = material('Helmet', '#5a5a3c', rough=0.6, metal=0.0)
@@ -218,7 +222,7 @@ for f in bm.faces:
         if all(v[dl].get(si, 0) > 0 for v in f.verts):
             mi = HAIR
         elif all(v[dl].get(li, 0) > 0 for v in f.verts):
-            mi = LIP
+            mi = SKIN if os.path.exists(SKIN_IMG) else LIP   # 貼圖上已有嘴唇
         else:
             mi = SKIN
     elif sum(r == 'Ankle' for r in rs) * 2 > len(rs):
@@ -730,9 +734,9 @@ for ob in [body]:
         socket = front * math.exp(-(dy / 0.012) ** 2) * math.exp(-((abs(g.z) - abs(G['eye.L'].z)) / 0.022) ** 2)
         n = 1.0 + (rnd.random() - 0.5) * 0.05
         c = buf[vi, :3]
-        c[0] *= n * (1 - 0.10 * beard) * (1 - 0.14 * socket)
-        c[1] *= n * (1 - 0.13 * red) * (1 - 0.08 * beard) * (1 - 0.16 * socket)
-        c[2] *= n * (1 - 0.17 * red) * (1 - 0.04 * beard) * (1 - 0.16 * socket)
+        c[0] *= n * (1 - 0.08 * beard) * (1 - 0.07 * socket)
+        c[1] *= n * (1 - 0.09 * red) * (1 - 0.06 * beard) * (1 - 0.08 * socket)
+        c[2] *= n * (1 - 0.12 * red) * (1 - 0.03 * beard) * (1 - 0.08 * socket)
     col.data.foreach_set('color', buf.ravel())
 
 name = f'crew_{VARIANT}'

@@ -72,6 +72,7 @@ blender -b --factory-startup -P tools/blender/gun_car.py -- B
 # 車廂重建後，把烘焙的 AO 貼圖壓成灰階：
 python tools/textures/shrink_ao.py
 # 軍士（需先在 Blender 安裝 MPFB 外掛；不要加 --factory-startup）與戰馬：
+python tools/textures/skin.py                        # 皮膚貼圖調色（軍士模型會讀取）
 blender -b -P tools/blender/soldier.py -- soldier   # 另有 crew、officer、enemy
 blender -b --factory-startup -P tools/blender/horse.py
 ```

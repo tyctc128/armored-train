@@ -30,6 +30,7 @@
 
 ## 人物
 
+- 皮膚：臉與手使用 MakeHuman 社群的皮膚貼圖（原為淺膚色，調成東亞膚色），再疊上頂點色的陰影與受凍的紅暈。
 - 人體：MPFB（MakeHuman）產生，亞洲男性、青年、中等體格，身高 1.66 m；髮型為丸刈り（貼著頭皮的短髮）。
 - **已核對**　我軍軍衣：昭五式（1930 年制定）是 1934 年的正確樣式——立領、五顆前扣、燕尾形兵科色領章（步兵緋色）、緋色呢料肩章、短袴、綁腿、編上靴。兵用軍衣只有胸前兩個口袋（有袋蓋），沒有下襬口袋；遊戲模型也是如此。
   出處：<https://ja.wikipedia.org/wiki/軍服_(大日本帝国陸軍)>、<https://en.wikipedia.org/wiki/Uniforms_of_the_Imperial_Japanese_Army>
@@ -70,4 +71,5 @@
 |---|---|---|
 | 天空與環境光 | Poly Haven「dry_field」HDRI | CC0 |
 | 裝甲漆面、鏽鐵、木地板、道碴、枯草、泥土、雪、呢料、皮革、樹皮 | Poly Haven 材質（清單見 `tools/textures/pack.py`） | CC0 |
+| 人物皮膚貼圖 | light_skin_male_bronze.png（Margaret Toigo，MakeHuman Community Skins02；取自 <https://opengameart.org/content/toigo-natural-male-skin>），由 `tools/textures/skin.py` 調成東亞膚色 | CC0 |
 | 人體底模 | MPFB 2.0.18（外掛為 GPL-3.0，產出的人體為 CC0） | CC0 |
