@@ -13,7 +13,7 @@ from PIL import Image
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 SRC = os.path.join(ROOT, 'assets', 'pbr', 'skin_src', 'light_skin_male_bronze.png')
 OUT = os.path.join(ROOT, 'assets', 'pbr', 'skin_asian.jpg')
-TARGET = np.array([199, 154, 116], dtype=np.float64)   # #c79a74
+TARGET = np.array([170, 124, 90], dtype=np.float64)   # 貼圖平均色；臉部比平均亮，實際膚色約 #c79a74
 
 im = Image.open(SRC).convert('RGB').resize((1024, 1024), Image.LANCZOS)
 a = np.asarray(im).astype(np.float64)
