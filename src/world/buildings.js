@@ -18,7 +18,7 @@ function canvasTexture(size, draw) {
 // 紅磚（一張 = 2 m：8 皮磚、每皮 8 塊，錯縫砌）
 function brickTexture() {
   return canvasTexture(512, (g, n) => {
-    g.fillStyle = '#b9b0a0';
+    g.fillStyle = '#8f877a'; // 灰泥縫，舊了偏暗
     g.fillRect(0, 0, n, n);
     const rows = 26;
     const cols = 9;
@@ -30,14 +30,16 @@ function brickTexture() {
       for (let c = -1; c < cols; c++) {
         const x = c * w + (r % 2 ? w / 2 : 0);
         const k = rnd();
-        const R = 132 + k * 50;
-        g.fillStyle = `rgb(${R | 0},${(62 + k * 26) | 0},${(48 + k * 18) | 0})`;
+        // 深紅磚（依滿鐵車站的老明信片），個別磚塊有燒色差異，少數偏黑
+        const dark = rnd() < 0.08 ? 0.6 : 1;
+        const R = (104 + k * 44) * dark;
+        g.fillStyle = `rgb(${R | 0},${((44 + k * 20) * dark) | 0},${((36 + k * 14) * dark) | 0})`;
         g.fillRect(x + 1.2, r * h + 1.2, w - 2.4, h - 2.4);
       }
     }
     // 污漬與風化
-    for (let i = 0; i < 900; i++) {
-      g.fillStyle = `rgba(${rnd() < 0.5 ? '30,24,20' : '200,190,170'},${0.03 + rnd() * 0.06})`;
+    for (let i = 0; i < 1500; i++) {
+      g.fillStyle = `rgba(${rnd() < 0.65 ? '30,24,20' : '200,190,170'},${0.03 + rnd() * 0.07})`;
       g.fillRect(rnd() * n, rnd() * n, 4 + rnd() * 26, 2 + rnd() * 9);
     }
   });

@@ -10,6 +10,7 @@ const JOINTS = [
 // 姿勢：各關節的 [繞 X, 繞 Y, 繞 Z] 弧度（角色面向 +X；繞 Z 正值＝往前抬）
 // 未列出的關節回到 0。hipsY 為骨盆高度位移（坐姿用）。
 const D = Math.PI / 180;
+const SWING = 0.4; // 走路時大腿前後擺動的幅度（弧度）
 export const POSES = {
   stand: {},
   attention: { ShoulderL: [0.05, 0, 0], ShoulderR: [-0.05, 0, 0] },
@@ -87,6 +88,9 @@ export class Soldier {
       this.rifleAim = { p: new THREE.Vector3(0.24, 0.37, 0.12), r: new THREE.Euler(0, 0, -Math.PI / 2) };
     }
     this.baseHipsY = this.j.Hips.position.y;
+    // 大腿、小腿長度：走路時用來算腳離骨盆多遠，讓踩地的那隻腳貼著地面
+    this.thigh = this.j.KneeL.position.length();
+    this.shin = this.j.AnkleL.position.length();
     this.rootPitch = 0;
     this.rootLift = 0;
     this.baseY = 0; // 由外部設定地面高度
@@ -138,7 +142,9 @@ export class Soldier {
     this.t += dt;
     if (this.saluteT > 0) this.saluteT -= dt;
     this.walk += ((speed > 0.05 ? 1 : 0) - this.walk) * Math.min(1, dt * 6);
-    this.phase += dt * (speed > 0.05 ? speed * 3.6 : 0);
+    // 步頻跟著步幅走（一個循環兩步，每步 2·腿長·sin(擺幅)），腳才不會在地上滑
+    const stride = 4 * (this.thigh + this.shin) * Math.sin(SWING);
+    this.phase += dt * (speed > 0.05 ? (speed * Math.PI * 2) / stride : 0);
     this.applyPose(false);
 
     const j = this.j;
@@ -154,13 +160,25 @@ export class Soldier {
     this.root.position.y = this.baseY + this.rootLift;
     // 呼吸與重心
     j.Spine.rotation.z += breathe;
-    j.Hips.position.y = this.baseHipsY + this.curHipsY + w * Math.abs(Math.cos(this.phase)) * 0.03;
+    j.Hips.position.y = this.baseHipsY + this.curHipsY;
     // 走路：雙腿交替、膝蓋彎曲、手臂反向擺動
     if (w > 0.01) {
-      j.HipL.rotation.z += s * 0.55 * w;
-      j.HipR.rotation.z -= s * 0.55 * w;
-      j.KneeL.rotation.z -= Math.max(0, -s) * 0.8 * w;
-      j.KneeR.rotation.z -= Math.max(0, s) * 0.8 * w;
+      // 腳踝在骨盆下方多遠（只看前後擺動）
+      const drop = (hip, knee) => this.thigh * Math.cos(hip.rotation.z) + this.shin * Math.cos(hip.rotation.z + knee.rotation.z);
+      const before = Math.max(drop(j.HipL, j.KneeL), drop(j.HipR, j.KneeR));
+      const c = Math.cos(this.phase);
+      j.HipL.rotation.z += s * SWING * w;
+      j.HipR.rotation.z -= s * SWING * w;
+      // 往前跨的那條腿才彎膝抬腳；踩地的腿幾乎打直
+      const kL = (Math.max(0, c) * 0.9 + 0.08) * w;
+      const kR = (Math.max(0, -c) * 0.9 + 0.08) * w;
+      j.KneeL.rotation.z -= kL;
+      j.KneeR.rotation.z -= kR;
+      // 腳掌大致保持水平
+      j.AnkleL.rotation.z -= (s * SWING * w - kL) * 0.6;
+      j.AnkleR.rotation.z -= (-s * SWING * w - kR) * 0.6;
+      // 雙腿張開時骨盆要跟著降低，否則兩隻腳都懸空（看起來像飄著走）
+      j.Hips.position.y += Math.max(drop(j.HipL, j.KneeL), drop(j.HipR, j.KneeR)) - before;
       if (this.pose !== 'carry') {
         j.ShoulderL.rotation.z -= s * 0.4 * w;
         j.ShoulderR.rotation.z += s * 0.4 * w;

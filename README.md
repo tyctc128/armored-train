@@ -43,7 +43,7 @@ npm run dev
 - **縫隙陰影**：每節車廂用 Blender 烘焙一張 AO 貼圖（`public/models/*_ao.jpg`，第二組 UV）；軍士與馬烘焙到頂點色
 - **車內電燈**：少數幾盞點光源，每幀移到離鏡頭最近的燈泡上（`src/render/interiorLights.js`）
 - **後製**：柔和光暈、色調調整、輕微暗角（`src/render/post.js`）
-- **人物**：MPFB（MakeHuman）產生的人體做成軍服並綁到簡化骨架，沿用原本的程式姿勢（`tools/blender/soldier.py`）；車外作戰的步兵與敵軍穿外套、戴防寒帽，外套下襬會跟著雙腿擺動
+- **人物**：MPFB（MakeHuman）產生的人體做成軍服並綁到簡化骨架，沿用原本的程式姿勢（`tools/blender/soldier.py`）；車外作戰的步兵與敵軍穿外套、戴防寒帽，外套下襬會跟著雙腿擺動。軍服是從胸口、肩胛往下垂掛的寬鬆剪裁並帶縐褶；臉部用 MakeHuman 的表情單元做出各兵種不同的神情；眼球放在由網格量出的眼眶位置；走路時骨盆隨步伐下沉，踩地的腳貼著地面
 - **地景**：枯草／泥土／殘雪混合的地表、落葉後的楊樹與柳樹、枯草叢（影片中當天沒有積雪，所以平地不鋪雪）、紅磚站房、水塔、號誌機、土坯民房（`src/world/`）
 - **特效**：火球轉黑煙、碎屑、硝煙、煤煙與蒸汽，會隨風飄散（`src/weapons/effects.js`）
 - **畫質**：暫停畫面可切換「高／低」；預設依顯示卡自動選擇（內建顯示卡用「低」：關後製、解析度與陰影減半、樹與草減量、貼圖邊長減半）。貼圖大小在載入時決定，切換後要重新整理頁面才會套用
@@ -72,6 +72,7 @@ blender -b --factory-startup -P tools/blender/gun_car.py -- B
 # 車廂重建後，把烘焙的 AO 貼圖壓成灰階：
 python tools/textures/shrink_ao.py
 # 軍士（需先在 Blender 安裝 MPFB 外掛；不要加 --factory-startup）與戰馬：
+python tools/textures/skin.py                        # 皮膚貼圖調色（軍士模型會讀取）
 blender -b -P tools/blender/soldier.py -- soldier   # 另有 crew、officer、enemy
 blender -b --factory-startup -P tools/blender/horse.py
 ```

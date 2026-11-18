@@ -48,7 +48,13 @@ from bl_ext.user_default.mpfb.services.targetservice import TargetService  # noq
 
 M_WOOL = material('Wool', '#5d6a63' if ENEMY else '#c4bca6' if CREW else '#75643f', rough=0.95)   # 昭五式：帶赤茶褐色；作業衣：未染色的白棉布
 M_PUTTEE = material('WoolDark', '#46504a' if ENEMY else '#695a3b', rough=0.95)
-M_SKIN = material('Skin', '#c79a74', rough=0.62)
+# 皮膚：MakeHuman 社群的皮膚貼圖（CC0），由 tools/textures/skin.py 調成東亞膚色；人體保留 MakeHuman 的 UV
+SKIN_IMG = os.path.join(PROJECT, 'assets', 'pbr', 'skin_asian.jpg')
+SKIN_SRC = os.path.join(PROJECT, 'assets', 'pbr', 'skin_src', 'light_skin_male_bronze.png')
+TEX = os.path.exists(SKIN_IMG) and os.path.exists(SKIN_SRC)
+M_SKIN = material('Skin', '#ffffff', rough=0.62, image=bpy.data.images.load(SKIN_IMG) if os.path.exists(SKIN_IMG) else None)
+if not os.path.exists(SKIN_IMG):
+    M_SKIN = material('Skin', '#c79a74', rough=0.62)
 M_LEATHER = material('Leather', '#5a3b22', rough=0.55)
 M_BOOT = material('Boot', '#33241a', rough=0.5)
 M_HELM = material('Helmet', '#5a5a3c', rough=0.6, metal=0.0)
@@ -58,6 +64,7 @@ M_STOCK = material('RifleWood', '#6b4426', rough=0.6)
 M_STEEL = material('Steel', '#2c2c29', rough=0.4, metal=0.8)
 M_DARK = material('Eye', '#1c120c', rough=0.3)
 M_CANVAS = material('Canvas', '#8a7b55', rough=1.0)
+HAIR_MUL = (0.26, 0.25, 0.27)    # 頭髮蓋在皮膚貼圖上的明暗倍率
 M_HAIR = material('Hair', '#4a3d34', rough=0.9)    # 丸刈り：貼著頭皮的短髮，顏色接近深膚色
 M_LIP = material('Lip', '#b58268', rough=0.55)
 M_WHITE = material('EyeWhite', '#d8d2c8', rough=0.3)
@@ -71,6 +78,31 @@ macro.update(gender=1.0, age=0.5, muscle=0.55, weight=0.42)
 macro['race'] = {'asian': 1.0, 'caucasian': 0.0, 'african': 0.0}
 body = HumanService.create_human(mask_helpers=True, detailed_helpers=False, extra_vertex_groups=True,
                                  feet_on_ground=False, scale=0.1, macro_detail_dict=macro)
+# 表情與體型：用 MPFB 內建的 MakeHuman 變形目標（表情單元、軀幹）。
+# 預設的臉完全放鬆、嘴微張，看起來沒有表情；軍服底下的身體則把胸肌、腰線、臀部收斂一些
+import bl_ext.user_default.mpfb as _mpfb  # noqa: E402
+TDIR = os.path.join(os.path.dirname(_mpfb.__file__), 'data', 'targets')
+EXPR = {
+    # 步兵（哨兵、機槍手）：寒風中瞇眼、抿嘴
+    'soldier': {'eyebrows-left-down': 0.45, 'eyebrows-right-down': 0.45, 'eye-left-slit': 0.3, 'eye-right-slit': 0.3,
+                'mouth-compression': 0.6, 'mouth-depression': 0.15},
+    # 車組員：專注操作，眉頭微皺
+    'crew': {'eyebrows-left-down': 0.3, 'eyebrows-right-down': 0.3, 'eyebrows-left-inner-up': 0.15, 'eyebrows-right-inner-up': 0.15,
+             'eye-left-slit': 0.15, 'eye-right-slit': 0.15, 'mouth-compression': 0.5},
+    # 軍官：嚴厲，嘴角下壓
+    'officer': {'eyebrows-left-down': 0.7, 'eyebrows-right-down': 0.7, 'eye-left-slit': 0.2, 'eye-right-slit': 0.2,
+                'mouth-compression': 0.5, 'mouth-depression': 0.45, 'nose-compression': 0.25},
+    # 敵軍：咬牙、瞇眼
+    'enemy': {'eyebrows-left-down': 0.6, 'eyebrows-right-down': 0.6, 'eye-left-slit': 0.45, 'eye-right-slit': 0.45,
+              'mouth-compression': 0.35, 'mouth-retraction': 0.3, 'nose-left-elevation': 0.2, 'nose-right-elevation': 0.2},
+}
+SHAPE = {'torso/torso-muscle-pectoral-decr': 1.0, 'buttocks/buttocks-volume-decr': 1.0, 'torso/measure-waist-circ-incr': 0.6}
+for tn, tw in list(SHAPE.items()) + [('expression/units/asian/' + k, w) for k, w in EXPR[VARIANT].items()]:
+    tp = os.path.join(TDIR, *tn.split('/')) + '.target.gz'
+    if os.path.exists(tp):
+        TargetService.load_target(body, tp, weight=tw, name=tn.split('/')[-1])
+    else:
+        print('MISSING TARGET', tp)
 TargetService.bake_targets(body)
 rig = HumanService.add_builtin_rig(body, 'default', import_weights=True)
 
@@ -165,7 +197,7 @@ for v in me.vertices:
 body.vertex_groups.clear()
 BONES = ['Hips', 'Spine', 'Head'] + [f'{b}{s}' for s in 'LR' for b in ('Shoulder', 'Elbow', 'Hand', 'Hip', 'Knee', 'Ankle')]
 vg = {n: body.vertex_groups.new(name=n) for n in BONES}
-for n in ('scalp', 'lips', 'helper'):
+for n in ('scalp', 'lips', 'helper', 'deci'):
     vg[n] = body.vertex_groups.new(name=n)
 for i, acc in enumerate(weights):
     tot = sum(acc.values())
@@ -216,9 +248,9 @@ for f in bm.faces:
         mi = PUT if WINTER else SKIN   # 冬季戴防寒手套
     elif all(r in ('Head', 'Spine') for r in rs) and f.calc_center_median().z > collar_z:
         if all(v[dl].get(si, 0) > 0 for v in f.verts):
-            mi = HAIR
+            mi = SKIN if TEX else HAIR   # 有貼圖時頭髮畫在頂點色上（見第 7 節）
         elif all(v[dl].get(li, 0) > 0 for v in f.verts):
-            mi = LIP
+            mi = SKIN if os.path.exists(SKIN_IMG) else LIP   # 貼圖上已有嘴唇
         else:
             mi = SKIN
     elif sum(r == 'Ankle' for r in rs) * 2 > len(rs):
@@ -228,7 +260,60 @@ for f in bm.faces:
     else:
         mi = WOOL
     f.material_index = mi
+
+if TEX:
+    # 髮際線：把頭皮權重抹開約 1 cm，減面後由頂點色內插成柔和的邊緣（丸刈り的短髮本來就沒有銳利的髮際線）
+    sw = {v: (1.0 if v[dl].get(si, 0) > 0 else 0.0) for v in bm.verts}
+    for _ in range(3):
+        sw = {v: (sw[v] + sum(sw[e.other_vert(v)] for e in v.link_edges)) / (1 + len(v.link_edges)) for v in bm.verts}
+    for v in bm.verts:
+        if sw[v] > 0.002:
+            v[dl][si] = sw[v]
+    # 眼窩：MakeHuman 的人體在眼皮後面有一塊凹進去的「眼窩內壁」（貼圖上塗成鮮紅色的兩個圓），原本由另外的眼球網格遮住。
+    # 用它量出眼眶實際的位置（骨架的 eye 骨頭不在眼眶正中）。
+    import numpy as np
+    src = bpy.data.images.load(SKIN_SRC)
+    iw, ih = src.size
+    px = np.empty(iw * ih * 4, dtype=np.float32)
+    src.pixels.foreach_get(px)
+    px = px.reshape(ih, iw, 4)
+    uv0 = bm.loops.layers.uv.verify()
+
+    def is_red(v):
+        if not v.link_loops:
+            return False
+        for loop in v.link_loops:
+            u, w_ = loop[uv0].uv
+            r_, g_ = px[min(ih - 1, max(0, int(w_ * ih))), min(iw - 1, max(0, int(u * iw)))][:2]
+            if not (r_ > 0.43 and g_ < 0.42 * r_):
+                return False
+        return True
+
+    EYE_R = 0.0125
+    for s_, sgn_ in (('L', 1), ('R', -1)):
+        ec = P[f'eye.{s_}']
+        pocket = [v for v in bm.verts if (v.co - ec).length < 0.06 and v.co.y * sgn_ > 0.012 and is_red(v)]
+        cs = [v.co for v in pocket]
+        lo = [min(c[i] for c in cs) for i in range(3)]
+        hi_ = [max(c[i] for c in cs) for i in range(3)]
+        # 眼球中心：眼窩正中，貼著內壁最深處往前一個半徑
+        cen = Vector((lo[0] + EYE_R + 0.0005, (lo[1] + hi_[1]) / 2, (lo[2] + hi_[2]) / 2))
+        P[f'eyeball.{s_}'] = cen
+        print('POCKET', s_, len(cs), 'bone', [round(c, 4) for c in ec], 'eyeball', [round(c, 4) for c in cen])
+        # 內壁壓平到眼球後半，減面後才不會穿到眼球前面
+        for v in pocket:
+            v.co.x = min(v.co.x, cen.x - EYE_R * 0.6)
+    bpy.data.images.remove(src)
+for f in bm.faces:
     f.smooth = True
+bm.normal_update()
+if not TEX:
+    for s_ in 'LR':
+        P[f'eyeball.{s_}'] = P[f'eye.{s_}'].copy()
+# 減面時不動眼睛周圍，眼皮的形狀才留得住
+for v in bm.verts:
+    if min((v.co - P['eyeball.L']).length, (v.co - P['eyeball.R']).length) > 0.024:
+        v[dl][vg['deci'].index] = 1.0
 
 # 衣物比皮膚厚：沿法線向外推；與皮膚相接的頂點不動（袖口、領口自然收攏）
 for v in bm.verts:
@@ -247,8 +332,124 @@ for v in bm.verts:
     elif r.startswith('Hand'):
         amt = 0.006
     else:
-        amt = 0.024 if WINTER else 0.012   # 袖子
+        amt = 0.026 if WINTER else 0.018   # 袖子
     v.co += v.normal * amt
+bm.normal_update()
+
+# 寬鬆剪裁：軍服是直筒剪裁的厚呢料，不會貼著身體。把布料改成「從最凸的地方往下垂掛」的筒狀：
+# 每個高度切一圈，取外輪廓（填掉胸肌之間、脊椎溝、臀縫等凹處），再讓下面每一圈至少和上面一樣寬。
+import numpy as np  # noqa: E402
+NS = 48
+
+
+def loosen(verts, z0, z1, ease, extra=None, h=0.012):
+    vs = [v for v in verts if z0 <= v.co.z <= z1]
+    if len(vs) < 50:
+        return
+    n = int((z1 - z0) / h) + 1
+    sl = [[] for _ in range(n)]
+    for v in vs:
+        sl[min(n - 1, int((v.co.z - z0) / h))].append(v)
+    R = np.zeros((n, NS))
+    ax = [None] * n
+    for i in range(n):
+        if len(sl[i]) < 6:
+            continue
+        xs = [v.co.x for v in sl[i]]
+        ys = [v.co.y for v in sl[i]]
+        ax[i] = ((min(xs) + max(xs)) / 2, (min(ys) + max(ys)) / 2)
+    known = [i for i in range(n) if ax[i]]
+    if not known:
+        return
+    for i in range(n):
+        if ax[i] is None:
+            ax[i] = ax[min(known, key=lambda j: abs(j - i))]
+
+    def pol(v, i):
+        dx, dy = v.co.x - ax[i][0], v.co.y - ax[i][1]
+        return math.hypot(dx, dy), (math.atan2(dy, dx) % (2 * math.pi)) / (2 * math.pi) * NS
+
+    for i in range(n):
+        for v in sl[i]:
+            r, k = pol(v, i)
+            for kk in (int(k) % NS, (int(k) + 1) % NS):
+                R[i, kk] = max(R[i, kk], r)
+        row = R[i]
+        for _ in range(4):      # 填凹處
+            row = np.maximum(row, (np.roll(row, 1) + np.roll(row, -1)) / 2)
+        R[i] = row
+    for i in range(n - 2, -1, -1):      # 由上往下垂
+        R[i] = np.maximum(R[i], R[i + 1])
+    for i in range(n):
+        for v in sl[i]:
+            r, k = pol(v, i)
+            k0 = int(k) % NS
+            f = k - int(k)
+            t = R[i, k0] * (1 - f) + R[i, (k0 + 1) % NS] * f + (extra(v.co.z) if extra else 0.0)     # 外輪廓再加鬆份
+            w = ease(v.co.z)
+            if t > r and w > 0 and r > 1e-5:
+                g = (r + (t - r) * w) / r
+                v.co.x = ax[i][0] + (v.co.x - ax[i][0]) * g
+                v.co.y = ax[i][1] + (v.co.y - ax[i][1]) * g
+
+
+def sstep(x):
+    x = max(0.0, min(1.0, x))
+    return x * x * (3 - 2 * x)
+
+
+wool_v = [v for v in bm.verts if v.link_faces and all(f.material_index == WOOL for f in v.link_faces)]
+belt_z = 0.6 * HEIGHT
+arm_z = P['upperarm01.L'].z - 0.05
+crotch_z = P['upperleg01.L'].z - 0.09
+knee_z = P['lowerleg01.L'].z
+torso_v = [v for v in wool_v if region[v] in ('Spine', 'Hips')]
+cinch = 0.88 if WINTER else 0.8      # 腰帶處只略為收束（布料從胸口直直垂到腰帶）
+EASE = 0.018 if WINTER else 0.016     # 上衣與身體之間的空隙
+# 上衣：腰帶上方的布料多出一圈，蓋在腰帶上（束腰帶後自然鼓出）
+loosen(torso_v, belt_z, arm_z, lambda z: cinch + (1 - cinch) * sstep((z - belt_z) / 0.09),
+       lambda z: EASE * sstep((arm_z - z) / 0.08) + 0.01 * math.exp(-((z - belt_z - 0.055) / 0.04) ** 2))
+loosen(torso_v, crotch_z, belt_z, lambda z: 1.0, lambda z: 0.02)
+for s_, sgn_ in (('L', 1), ('R', -1)):
+    # 短袴：大腿寬鬆，到膝蓋收攏
+    leg_v = [v for v in wool_v if region[v] == 'Hip' + s_]
+    loosen(leg_v, knee_z, P['upperleg01.L'].z, lambda z: sstep((z - knee_z) / 0.06),
+           lambda z: 0.01 + 0.02 * sstep((z - knee_z) / 0.07))      # 短袴：膝上就鼓出來，垂在綁腿上緣
+    for v in leg_v:
+        if v.co.y * sgn_ < 0.003:
+            v.co.y = 0.003 * sgn_
+    # 袖子：從肩頭垂下的直筒，到袖口收攏
+    wrist_z = P[f'wrist.{s_}'].z
+    arm_v = [v for v in wool_v if region[v] in ('Shoulder' + s_, 'Elbow' + s_)]
+    loosen(arm_v, wrist_z, arm_z, lambda z: sstep((z - wrist_z) / 0.04),
+           lambda z: (0.02 if WINTER else 0.015) * sstep((arm_z - z) / 0.06))      # 直筒袖，到袖口才收
+# 抹平：去掉肌肉線條與上面各段之間的接縫（與皮膚相接的頂點不動）
+for _ in range(10):
+    new = {}
+    for v in wool_v:
+        nb = [e.other_vert(v).co for e in v.link_edges]
+        new[v] = v.co.lerp(sum(nb, Vector()) / len(nb), 0.5)
+    for v, c in new.items():
+        v.co = c
+bm.normal_update()
+for v in wool_v:
+    v.co += v.normal * 0.004      # 補回抹平時縮掉的體積
+bm.normal_update()
+# 縐褶：布料不是光滑的殼。軀幹是直向的垂褶，袖子在手肘、褲子在膝上是橫向的擠褶
+from mathutils import noise as _noise  # noqa: E402
+elbow_z = P['lowerarm01.L'].z
+for v in wool_v:
+    c = v.co
+    rg = region[v]
+    if rg in ('Spine', 'Hips'):
+        d = 0.007 * _noise.noise(Vector((c.x * 16, c.y * 16, c.z * 4.5))) + 0.006 * math.exp(-((c.z - belt_z - 0.05) / 0.05) ** 2) * _noise.noise(Vector((c.x * 30, c.y * 30, c.z * 6)))
+    elif rg.startswith(('Shoulder', 'Elbow')):
+        d = (0.004 + 0.007 * math.exp(-((c.z - elbow_z) / 0.09) ** 2)) * _noise.noise(Vector((c.x * 7, c.y * 7, c.z * 34)))
+    elif rg.startswith('Hip'):
+        d = (0.004 + 0.008 * math.exp(-((c.z - knee_z - 0.07) / 0.08) ** 2)) * _noise.noise(Vector((c.x * 8, c.y * 8, c.z * 30)))
+    else:
+        d = 0.0
+    v.co += v.normal * d
 bm.normal_update()
 
 # 衣物改用盒狀投影 UV（1 單位 = 4 m，與車廂一致），布紋才不會隨人體 UV 忽大忽小
@@ -267,6 +468,7 @@ FEET = {s: [game(v.co) for v in bm.verts if region[v] == 'Ankle' + s] for s in '
 bmesh.ops.delete(bm, geom=[f for f in bm.faces if f.material_index == BOOT], context='FACES')
 CLOTH = [(game(v.co), region[v]) for v in bm.verts if not ({f.material_index for f in v.link_faces} & SKINLIKE)]
 HEADV = [game(v.co) for v in bm.verts if region[v] == 'Head' and v.co.z > collar_z]
+LIPV = [game(v.co) for v in bm.verts if v[dl].get(li, 0) > 0.5]
 NECKV = [game(v.co) for v in bm.verts if abs(v.co.z - collar_z) < 0.02 and region[v] in ('Head', 'Spine')]
 face_mats = [f.material_index for f in bm.faces]
 bm.to_mesh(me)
@@ -275,7 +477,7 @@ me.materials.clear()
 for mat in MATS:
     me.materials.append(mat)
 me.polygons.foreach_set('material_index', face_mats)
-for n in ('scalp', 'lips', 'helper'):
+for n in (('lips', 'helper') if TEX else ('scalp', 'lips', 'helper')):   # 有貼圖時 scalp 留到第 7 節畫頭髮
     body.vertex_groups.remove(vg[n])
 body.name = 'Body'
 
@@ -285,9 +487,11 @@ bpy.ops.object.select_all(action='DESELECT')
 body.select_set(True)
 bpy.context.view_layer.objects.active = body
 d = body.modifiers.new('Decimate', 'DECIMATE')
-d.ratio = 0.3
+d.ratio = 0.36     # 留多一點面，縐褶才保得住
+d.vertex_group = 'deci'
 d.use_collapse_triangulate = True
 bpy.ops.object.modifier_apply(modifier=d.name)
+body.vertex_groups.remove(body.vertex_groups['deci'])
 print('BODY TRIS', sum(len(p.vertices) - 2 for p in body.data.polygons))
 
 # ───────────────────────── 4. 量測身體，供裝具定位 ─────────────────────────
@@ -327,11 +531,16 @@ def back_x(y, z=0.0, dy=0.03, dz=0.05):
     return min(p.x for p in TORSO if abs(p.y - y) < dy and abs(p.z - z) < dz)
 
 
-def tube(mb, rings, mi, segs=24):
+def tube(mb, rings, mi, segs=24, pleat=None):
     """rings：[(y, cx, cz, rx, rz)] 由下而上的橢圓環。"""
     rows = []
-    for y, cx, cz, rx, rz in rings:
-        rows.append([mb.bm.verts.new(V(cx + math.cos(2 * math.pi * i / segs) * rx, y, cz + math.sin(2 * math.pi * i / segs) * rz)) for i in range(segs)])
+    for ri, (y, cx, cz, rx, rz) in enumerate(rings):
+        row = []
+        for i in range(segs):
+            a = 2 * math.pi * i / segs
+            g = pleat[ri] * (0.6 * math.sin(7 * a + 0.8) + 0.4 * math.sin(11 * a + 2.1)) if pleat else 0.0     # 垂褶
+            row.append(mb.bm.verts.new(V(cx + math.cos(a) * (rx + g), y, cz + math.sin(a) * (rz + g))))
+        rows.append(row)
     for a, b in zip(rows[:-1], rows[1:]):
         for i in range(segs):
             j = (i + 1) % segs
@@ -394,7 +603,7 @@ if WINTER:
         gx = 0.006 + k * 0.03 + t * 0.035
         gz = 0.006 + k * 0.026 + t * 0.03
         rings.append((y, cx + (hx - cx) * k, cz + (hz - cz) * k, rx + (hrx - rx) * k + gx, rz + (hrz - rz) * k + gz))
-    tube(m, list(reversed(rings)), WOOL)
+    tube(m, list(reversed(rings)), WOOL, segs=44, pleat=[0.014 * (1 - i / 7) ** 1.0 for i in range(8)])     # 越往下襬垂褶越深
     for j in range(2):     # 下襬的鈕扣（單排扣）
         for z in (0.0,):
             y = belt_y - 0.09 - j * 0.13
@@ -405,16 +614,16 @@ if WINTER:
 
     def skirt_weights(g):
         t = max(0.0, min(1.0, (belt_y - g.y) / (belt_y - hem_y)))
-        leg = 0.8 * t
+        leg = min(1.0, t / 0.5)      # 下襬中段以下完全跟著大腿，膝蓋才不會從外套正面頂出來
         left = max(0.0, min(1.0, 0.5 - g.z / 0.16))    # 左側為 -Z
         return {'Hips': 1 - leg, 'HipL': leg * left, 'HipR': leg * (1 - left)}
 
     part('CoatSkirt', skirt_weights, m, bevel=0)
 else:
-    tube(m, [(belt_y - 0.2, hx, hz, hrx + 0.03, hrz + 0.028), (belt_y - 0.1, hx, hz, hrx + 0.022, hrz + 0.02), (belt_y + 0.01, cx, cz, rx + 0.006, rz + 0.006)], WOOL)
+    tube(m, [(belt_y - 0.2, hx, hz, hrx + 0.03, hrz + 0.028), (belt_y - 0.1, hx, hz, hrx + 0.022, hrz + 0.02), (belt_y + 0.01, cx, cz, rx + 0.006, rz + 0.006)], WOOL, segs=36, pleat=[0.007, 0.004, 0.0])
     part('TunicSkirt', 'Hips', m, bevel=0)
 m = MeshBuilder()
-r0, r1 = 0.004, 0.012
+r0, r1 = 0.012, 0.022     # 上衣不是正橢圓，皮帶要再大一圈才不會陷進布料
 tube(m, [(belt_y - 0.025, cx, cz, rx + r0, rz + r0), (belt_y - 0.025, cx, cz, rx + r1, rz + r1), (belt_y + 0.025, cx, cz, rx + r1, rz + r1), (belt_y + 0.025, cx, cz, rx + r0, rz + r0)], LEA)
 m.box((cx + rx + r1, belt_y, cz), (0.012, 0.05, 0.055), BRS)                                # 帶扣
 if VARIANT in ('soldier', 'enemy'):
@@ -532,16 +741,27 @@ for s in 'LR':
 # ── 眼球 ──
 m = MeshBuilder()
 for s in 'LR':
-    e = G[f'eye.{s}'] + Vector((0.003, 0, 0))
-    r = 0.0128
-    prof = [(math.cos(math.radians(a)) * r, max(0.0, math.sin(math.radians(a)) * r)) for a in range(180, -1, -20)]
-    m.lathe(tuple(e), (1, 0, 0), [p for p in prof if p[0] <= r * 0.78], 14, WHT, cap0=False, cap1=False)
-    m.lathe(tuple(e), (1, 0, 0), [p for p in prof if p[0] >= r * 0.76], 14, EYE, cap0=False, cap1=False)
+    e = G[f'eyeball.{s}']
+    r = 0.0125
+    prof = [(math.cos(math.radians(a)) * r, max(0.0, math.sin(math.radians(a)) * r)) for a in range(180, -1, -15)]
+    m.lathe(tuple(e), (1, 0, 0), [p for p in prof if p[0] <= r * 0.87], 16, WHT, cap0=False, cap1=False)
+    m.lathe(tuple(e), (1, 0, 0), [p for p in prof if p[0] >= r * 0.86], 16, EYE, cap0=False, cap1=False)   # 虹膜直徑約 13 mm
     # 眉毛：眼睛上方的深色細條，略向外下斜
     sgn = -1 if s == 'L' else 1
-    for j in range(4):
-        t = j / 3
-        m.box((e.x + 0.013 - 0.004 * t, e.y + 0.021 - 0.004 * t * t, e.z + sgn * (-0.008 + 0.026 * t)), (0.005, 0.0045, 0.009), HAIR)
+    for j in range(13):
+        t = j / 12
+        by, bz = e.y + 0.0155 + 0.004 * t - 0.007 * t * t, e.z + sgn * (-0.011 + 0.031 * t)
+        near = [p.x for p in HEADV if abs(p.y - by) < 0.005 and abs(p.z - bz) < 0.005]
+        bx = max(near) if near else e.x + 0.02     # 眉骨表面
+        m.box((bx - 0.0015, by, bz), (0.005, 0.0036 - 0.0016 * t, 0.0045), HAIR)
+# 嘴唇之間：MakeHuman 的嘴是張開一條縫的，裡面沒有牙齒，會直接看穿到後面。在唇後放一塊深色擋住
+if LIPV:
+    lx = max(p.x for p in LIPV)
+    ly = sorted(p.y for p in LIPV)[len(LIPV) // 2]
+    lw = max(abs(p.z) for p in LIPV)
+    m.box((lx - 0.0125, ly, 0), (0.006, 0.007, lw * 0.9), HAIR)   # 用不反光的深色（Eye 材質會反射天空而發亮）
+    for sg_ in (-1, 1):     # 嘴角往後彎，分段跟著退
+        m.box((lx - 0.0185, ly, sg_ * lw * 0.62), (0.006, 0.006, lw * 0.5), HAIR)
 part('Eyes', 'Head', m, bevel=0)
 
 # ── 鉄帽／軍帽 ──
@@ -714,7 +934,7 @@ for ob in [body]:
     for poly in ob.data.polygons:
         if poly.material_index == SKIN:
             skin_v.update(poly.vertices)
-    eye = (G['eye.L'] + G['eye.R']) / 2
+    eye = (G['eyeball.L'] + G['eyeball.R']) / 2
     ear_r = max(abs(p_.z) for p_ in HEADV)
     rnd = np.random.default_rng(7)
     for vi in skin_v:
@@ -727,12 +947,22 @@ for ob in [body]:
         ear = max(0.0, min(1.0, (abs(g.z) - ear_r * 0.86) / (ear_r * 0.1))) * (1.0 if abs(dy) < 0.05 else 0.3)
         red = min(1.0, cheek * 0.8 + ear * 0.7)
         beard = front * max(0.0, min(1.0, (-dy - 0.062) / 0.02)) * max(0.0, min(1.0, (dy + 0.135) / 0.02))
-        socket = front * math.exp(-(dy / 0.012) ** 2) * math.exp(-((abs(g.z) - abs(G['eye.L'].z)) / 0.022) ** 2)
+        socket = front * math.exp(-(dy / 0.012) ** 2) * math.exp(-((abs(g.z) - abs(G['eyeball.L'].z)) / 0.022) ** 2)
         n = 1.0 + (rnd.random() - 0.5) * 0.05
         c = buf[vi, :3]
-        c[0] *= n * (1 - 0.10 * beard) * (1 - 0.14 * socket)
-        c[1] *= n * (1 - 0.13 * red) * (1 - 0.08 * beard) * (1 - 0.16 * socket)
-        c[2] *= n * (1 - 0.17 * red) * (1 - 0.04 * beard) * (1 - 0.16 * socket)
+        c[0] *= n * (1 - 0.08 * beard) * (1 - 0.07 * socket)
+        c[1] *= n * (1 - 0.09 * red) * (1 - 0.06 * beard) * (1 - 0.08 * socket)
+        c[2] *= n * (1 - 0.12 * red) * (1 - 0.03 * beard) * (1 - 0.08 * socket)
+    # 頭髮（丸刈り）：頭皮上的深色短髮，邊緣漸淡
+    sg = ob.vertex_groups.get('scalp')
+    if sg is not None:
+        for v in ob.data.vertices:
+            w_ = next((g_.weight for g_ in v.groups if g_.group == sg.index), 0.0)
+            k_ = max(0.0, min(1.0, (w_ - 0.3) / 0.4))
+            if k_ > 0:
+                k_ = k_ * k_ * (3 - 2 * k_)
+                buf[v.index, :3] *= 1 + (np.array(HAIR_MUL) - 1) * k_
+        ob.vertex_groups.remove(sg)
     col.data.foreach_set('color', buf.ravel())
 
 name = f'crew_{VARIANT}'

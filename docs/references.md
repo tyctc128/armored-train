@@ -30,6 +30,7 @@
 
 ## 人物
 
+- 皮膚：臉與手使用 MakeHuman 社群的皮膚貼圖（原為淺膚色，調成東亞膚色），再疊上頂點色的陰影與受凍的紅暈。
 - 人體：MPFB（MakeHuman）產生，亞洲男性、青年、中等體格，身高 1.66 m；髮型為丸刈り（貼著頭皮的短髮）。
 - **已核對**　我軍軍衣：昭五式（1930 年制定）是 1934 年的正確樣式——立領、五顆前扣、燕尾形兵科色領章（步兵緋色）、緋色呢料肩章、短袴、綁腿、編上靴。兵用軍衣只有胸前兩個口袋（有袋蓋），沒有下襬口袋；遊戲模型也是如此。
   出處：<https://ja.wikipedia.org/wiki/軍服_(大日本帝国陸軍)>、<https://en.wikipedia.org/wiki/Uniforms_of_the_Imperial_Japanese_Army>
@@ -58,7 +59,10 @@
 ## 沿線建築
 
 - **部分核對（依影片）**　車站：影片中的站場有月台、長條的月台雨棚、跨越軌道的有頂木造天橋、淺灰色的碎石道碴；沿線電線桿是單一橫擔，鐵道旁有石砌的小涵洞。
-  遊戲有月台、雨棚、道碴與電線桿；天橋和涵洞沒有做。紅磚站房、木桶水塔、臂木式號誌機在影片中沒有看到清楚的畫面，仍是依一般印象做的。
+  遊戲有月台、雨棚、道碴與電線桿；天橋和涵洞沒有做。
+- **部分核對（依老明信片）**　紅磚與水塔：1910 年的滿鐵奉天站明信片是深紅磚牆配白色石帶，站旁有圓筒形的紅磚水塔、頂上是深色水槽。這佐證了「紅磚站房」與「磚砌水塔」；遊戲的磚色已依此改成較深的紅並加上髒污。
+  但奉天是大站，沿線小站的實際樣子仍沒有照片可對；遊戲水塔頂部做成木桶、以及臂木式號誌機，仍是依一般印象。
+  出處：<https://commons.wikimedia.org/wiki/File:South_Manchuria_Railway_Station_at_Mukden,_Manchuria.jpg>
   建議對照的照片集：《南満洲鉄道沿線写真帖》《満鉄写真帖》（1926）。出處：<https://ndlsearch.ndl.go.jp/rnavi/asia/post_136>
 - **部分核對**　民房：當時的照片說明提到滿洲農家是泥土與日曬磚的牆、茅草或高粱稈屋頂、木框窗在冬天糊紙；炕由灶、炕面、煙囪組成。門朝南與煙囪在山牆側查不到出處。
   出處：<https://calisphere.org/item/efa272b377f9dadf8a76317cd62842cb/>
@@ -70,4 +74,5 @@
 |---|---|---|
 | 天空與環境光 | Poly Haven「dry_field」HDRI | CC0 |
 | 裝甲漆面、鏽鐵、木地板、道碴、枯草、泥土、雪、呢料、皮革、樹皮 | Poly Haven 材質（清單見 `tools/textures/pack.py`） | CC0 |
+| 人物皮膚貼圖 | light_skin_male_bronze.png（Margaret Toigo，MakeHuman Community Skins02；取自 <https://opengameart.org/content/toigo-natural-male-skin>），由 `tools/textures/skin.py` 調成東亞膚色 | CC0 |
 | 人體底模 | MPFB 2.0.18（外掛為 GPL-3.0，產出的人體為 CC0） | CC0 |
