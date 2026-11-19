@@ -28,7 +28,7 @@ from common import (  # noqa: E402
 
 reset_scene()
 TEX = os.path.join(PROJECT, 'assets', 'textures')
-M_COAT = material('Coat', image=paint_texture(TEX, '#6b4426', 'horse_coat_dun', seed=33), rough=0.75)
+M_COAT = material('Coat', image=paint_texture(TEX, '#4c3a2b', 'horse_coat_dun', seed=33), rough=0.95)   # 冬毛：暗而不反光的鹿毛色
 M_MANE = material('Mane', '#1e1712', rough=0.9)
 M_HOOF = material('Hoof', '#2e2b28', rough=0.6)
 M_LEATHER = material('Leather', '#4a2e1a', rough=0.55)
@@ -152,7 +152,7 @@ for tag, x, z in (('FL', 0.58, -0.17), ('FR', 0.58, 0.17), ('BL', -0.58, -0.17),
     knee = empty(f'Knee{tag}', leg, (0, -UPPER, 0))
     m = MeshBuilder()
     loft(m, [((0.0, 0.03), 0.058, 0.052), ((0.0, -0.08), 0.042, 0.036), ((0.0, -0.3), 0.038, 0.032), ((0.0, -0.37), 0.052, 0.046),
-             ((0.015, -0.42), 0.042, 0.04), ((0.025, -(LOWER - 0.075)), 0.046, 0.046)], COAT, 10)
+             ((0.015, -0.42), 0.042, 0.04), ((0.025, -(LOWER - 0.075)), 0.046, 0.046)], MANE, 10)   # 四肢下段為黑色（鹿毛馬的特徵）
     loft(m, [((0.025, -(LOWER - 0.08)), 0.048, 0.048), ((0.035, -LOWER), 0.064, 0.062)], HOOF, 10)   # 蹄
     loft(m, [((0.0, -0.33), 0.058, 0.05), ((-0.02, -0.4), 0.05, 0.03)], MANE, 8)                    # 距毛
     part(f'Lower{tag}', knee, m)

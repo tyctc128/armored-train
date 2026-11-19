@@ -79,7 +79,7 @@ const SPECS = {
   RifleWood: { set: 'planks', rep: 9, n: 0.3, rough: 0.7, metal: 0.0 },
   Steel: { set: 'paint', rep: 8, n: 0.2, rough: 0.5, metal: 0.85 },
   // 馬
-  Coat: { set: 'wool', rep: 9, n: 0.3, rough: 0.8, metal: 0.0, detail: 0.3, gain: 1.9 },
+  Coat: { set: 'wool', rep: 16, n: 0.6, rough: 1.0, metal: 0.0, detail: 0.5, gain: 1.9 },
   Mane: { set: 'wool', rep: 12, n: 1.0, rough: 1.0, metal: 0.0, detail: 0.4, gain: 1.9 },
 };
 

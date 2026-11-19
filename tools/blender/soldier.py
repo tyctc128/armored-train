@@ -114,7 +114,7 @@ for side, out in (('L', 1), ('R', -1)):
     pb = rig.pose.bones[f'upperarm01.{side}']
     wr = rig.pose.bones[f'wrist.{side}']
     v = (wr.head - pb.head).normalized()
-    tgt = Vector((0.07 * out, 0.02, -1)).normalized()
+    tgt = Vector((0.15 * out, 0.02, -1)).normalized()     # 手臂略向外張，手才不會埋進寬鬆的下襬與褲管
     q = v.rotation_difference(tgt)
     pb.matrix = Matrix.Translation(pb.head) @ q.to_matrix().to_4x4() @ Matrix.Translation(-pb.head) @ pb.matrix
     bpy.context.view_layer.update()
@@ -126,6 +126,21 @@ for side, out in (('L', 1), ('R', -1)):
     q = v.rotation_difference(tgt)
     pb.matrix = Matrix.Translation(pb.head) @ q.to_matrix().to_4x4() @ Matrix.Translation(-pb.head) @ pb.matrix
     bpy.context.view_layer.update()
+# 手指自然微彎（MakeHuman 預設五指僵直張開）：手臂垂下後掌心朝向大腿，各指節朝掌心方向彎
+for side, out in (('L', 1), ('R', -1)):
+    palm = Vector((-out, 0, 0))
+    for f in range(1, 6):
+        for seg, ang in ((1, 0.2 if f == 1 else 0.4), (2, 0.25 if f == 1 else 0.6), (3, 0.2 if f == 1 else 0.4)):
+            pb = rig.pose.bones.get(f'finger{f}-{seg}.{side}')
+            if pb is None:
+                continue
+            d = (pb.tail - pb.head).normalized()
+            ax = d.cross(palm)
+            if ax.length < 1e-4:
+                continue
+            q = Matrix.Rotation(ang, 4, ax.normalized())
+            pb.matrix = Matrix.Translation(pb.head) @ q @ Matrix.Translation(-pb.head) @ pb.matrix
+            bpy.context.view_layer.update()
 bpy.context.view_layer.update()
 PB = {b.name: (rig.matrix_world @ b.head).copy() for b in rig.pose.bones}
 RIG_BONES = set(PB)
