@@ -73,6 +73,7 @@ blender -b --factory-startup -P tools/blender/gun_car.py -- B
 python tools/textures/shrink_ao.py
 # 軍士（需先在 Blender 安裝 MPFB 外掛；不要加 --factory-startup）與戰馬：
 python tools/textures/skin.py                        # 皮膚貼圖調色（軍士模型會讀取）
+- 車身迷彩與車內牆面是程式畫的整張貼圖（`public/textures/camo_d.jpg`、`interior_d.jpg`），遊戲載入後套在模型原本的 UV 上；重畫請執行 `python tools/textures/camo.py`、`python tools/textures/interior.py`（新增 public 下的檔案後要重啟開發伺服器）
 blender -b -P tools/blender/soldier.py -- soldier   # 另有 crew、officer、enemy
 blender -b --factory-startup -P tools/blender/horse.py
 ```

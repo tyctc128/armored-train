@@ -50,6 +50,22 @@ export function tex(name, repeat = 1, srgb = false) {
   return t;
 }
 
+// 程式畫的整張貼圖（tools/textures/camo.py、interior.py）：一張 4 m，沿用模型原本的盒狀投影 UV
+const sheets = new Map();
+function sheetTexture(name) {
+  if (sheets.has(name)) return sheets.get(name);
+  const t = loader.load(`${import.meta.env.BASE_URL}textures/${name}.jpg`, (loaded) => {
+    shrink(loaded);
+    loaded.needsUpdate = true;
+  });
+  t.flipY = false; // 與 glTF 內嵌貼圖相同的 UV 原點
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = maxAniso;
+  sheets.set(name, t);
+  return t;
+}
+
 // 材質名稱（Blender 端命名）→ 寫實設定
 //   set：細節貼圖組；rep：每 4 m 重複幾次；n：法線強度；rough／metal：整體係數
 //   albedo：true 時以該組的顏色貼圖取代原色；detail：把顏色貼圖的明暗疊到原貼圖上（漆面不均、掉漆）
@@ -91,6 +107,12 @@ function build(src, spec, aoMap) {
   m.color.copy(src.color);
   m.vertexColors = src.vertexColors; // 人物把烘焙的縫隙陰影存在頂點色
   m.map = src.map ?? null;
+  if (src.name === 'Armor' && src.map) m.map = sheetTexture('camo_d'); // 手刷感的迷彩，取代 .glb 內嵌的版本
+  if (src.name === 'InteriorPaint') {
+    // 車內牆面：刷白漆的鉚接鋼板（鉚釘列、板縫、鏽水痕）。貼圖接近白色，顏色由這裡決定
+    m.map = sheetTexture('interior_d');
+    m.color.set(0xb4b5a0);
+  }
   if (spec.albedo) {
     m.map = tex(`${spec.set}_d`, spec.rep, true);
     m.color.set(spec.color ?? 0xffffff);
@@ -157,16 +179,32 @@ function build(src, spec, aoMap) {
           diffuseColor.rgb *= 1.0 - soot * 0.55;
           // 垂直面的雨水流痕
           float streak = wNoise(vec2(vBaseUv.x * 46.0, vBaseUv.y * 1.3)) * (1.0 - abs(vWN.y));
-          diffuseColor.rgb *= 1.0 - smoothstep(0.55, 0.95, streak) * 0.22;` : ''}
+          diffuseColor.rgb *= 1.0 - smoothstep(0.55, 0.95, streak) * 0.22;
+          // 鏽水痕：細而長的褐色流痕，越靠下緣越多
+          float rStreak = wNoise(vec2(vBaseUv.x * 83.0, vBaseUv.y * 0.9 + 7.3)) * (1.0 - abs(vWN.y));
+          float rustS = smoothstep(0.7, 0.95, rStreak) * (0.4 + 0.6 * wN) * (0.5 + 0.5 * smoothstep(3.0, 0.6, vH));
+          diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.19, 0.105, 0.06), rustS * 0.42);
+          // 日曬褪色：整片顏色深淺、冷暖不一
+          float fade = wFbm(vBaseUv * 0.6 + 11.0);
+          diffuseColor.rgb = mix(diffuseColor.rgb, vec3(dot(diffuseColor.rgb, vec3(0.3, 0.55, 0.15))) * vec3(1.05, 1.02, 0.9), fade * 0.28);` : ''}
           ${spec.weather === 'in' ? `
           // 車內：靠近地板的踢痕與積塵、整體使用痕跡
           float grime = smoothstep(2.3, 1.3, vH) * (0.3 + 0.7 * wN) * 0.65;
           diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(0.5, 0.44, 0.36), grime);
-          diffuseColor.rgb *= 0.74 + 0.3 * wFbm(vBaseUv * 2.3);` : ''}
+          diffuseColor.rgb *= 0.74 + 0.3 * wFbm(vBaseUv * 2.3);
+          // 牆面的水漬與鏽水流痕、漆面泛黃、肩膀高度的磨蹭痕
+          float inStreak = wNoise(vec2(vBaseUv.x * 61.0, vBaseUv.y * 1.1 + 3.7)) * (1.0 - abs(vWN.y));
+          diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(0.6, 0.47, 0.34), smoothstep(0.62, 0.95, inStreak) * 0.55);
+          diffuseColor.rgb *= mix(vec3(1.0), vec3(1.0, 0.94, 0.8), 0.35 + 0.65 * wFbm(vBaseUv * 0.9 + 5.0));
+          float rub = exp(-pow((vH - 2.45) / 0.22, 2.0)) * (1.0 - abs(vWN.y)) * (0.3 + 0.7 * wFbm(vBaseUv * 6.0));
+          diffuseColor.rgb *= 1.0 - rub * 0.3;` : ''}
           #ifdef USE_AOMAP
           // 烘焙的縫隙陰影也稍微壓暗直射光下的顏色（電燈沒有陰影，否則角落會太平）
           float bakedAO = texture2D(aoMap, vAoMapUv).r;
-          diffuseColor.rgb *= mix(1.0, bakedAO, ${spec.weather === 'in' ? '0.75' : '0.4'});
+diffuseColor.rgb *= mix(1.0, bakedAO, ${spec.weather === 'in' ? '0.75' : '0.4'});
+          // 縫隙、鉚釘周圍、零件接合處積了油污與鏽：不只變暗，也偏褐
+          float crev = clamp((1.0 - bakedAO) * 1.8, 0.0, 1.0) * (0.55 + 0.45 * wN);
+          diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(0.5, 0.38, 0.27), crev * ${spec.weather ? '0.75' : '0.0'});
           #endif`,
         )
         .replace(

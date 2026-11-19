@@ -76,3 +76,10 @@
 | 裝甲漆面、鏽鐵、木地板、道碴、枯草、泥土、雪、呢料、皮革、樹皮 | Poly Haven 材質（清單見 `tools/textures/pack.py`） | CC0 |
 | 人物皮膚貼圖 | light_skin_male_bronze.png（Margaret Toigo，MakeHuman Community Skins02；取自 <https://opengameart.org/content/toigo-natural-male-skin>），由 `tools/textures/skin.py` 調成東亞膚色 | CC0 |
 | 人體底模 | MPFB 2.0.18（外掛為 GPL-3.0，產出的人體為 CC0） | CC0 |
+
+## 舊化與筆觸（美術判斷）
+
+- 迷彩色帶改成手刷的樣子（邊緣參差、寬度變化、筆觸），顏色調成褪色的黃赭；色帶的位置與走向沿用依影片做的版面。
+- 車身的鏽水痕、掉漆、日曬褪色，車內牆面的鉚釘間距（9 cm）、板縫位置、鏽斑與水漬，都沒有對照到史料，是美術判斷。
+  影片只能確認：車身是迷彩、車內牆面為淺色且看得到鉚釘。
+- 枕木改成浸過防腐油的深灰褐色（一般鐵道常識，非本車專屬史料）。

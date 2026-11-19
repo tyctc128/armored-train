@@ -148,7 +148,7 @@ export class Track {
 
     // 枕木
     const tieGeo = new THREE.BoxGeometry(0.24, 0.18, 2.6);
-    const tieMat = worldMaterial('planks', 1.4, { color: 0x6f6257 });
+    const tieMat = worldMaterial('planks', 1.4, { color: 0x3f3a35 }); // 浸過防腐油的枕木：深灰褐，不是新木頭的橘色
     const spacing = 0.65;
     const tieCount = Math.floor(this.length / spacing);
     const ties = new THREE.InstancedMesh(tieGeo, tieMat, tieCount);
